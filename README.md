@@ -7,12 +7,23 @@ Personal configuration package for [`pi`](https://pi.dev): extensions, prompt te
 ```text
 .
 ├── pi/
+│   ├── agents/      # Custom agent definitions (personas with model, tools, prompts)
 │   ├── extensions/  # Pi TypeScript/JavaScript extensions: tools, commands, hooks, UI
 │   ├── skills/      # Pi-specific Agent Skills only
 │   ├── prompts/     # Reusable slash-command prompt templates
 │   └── themes/      # Custom Pi TUI themes
 └── lib/             # Shared utility code (not loaded by Pi)
 ```
+
+### `pi/agents/`
+
+Custom agent definitions — reusable personas with their own model, tool restrictions, and system prompt. Each `.md` file defines one agent via YAML frontmatter.
+
+- `pi --agent code-reviewer` — run a session as that agent
+- `/agent:code-reviewer` — switch agent mid-session
+- The main agent automatically delegates to agents via the `agent` tool
+
+Model aliases are configured in `pi/agents/models.json`. See the agents extension at `pi/extensions/agents/` for the implementation.
 
 ### `pi/extensions/`
 
@@ -76,13 +87,15 @@ This repo is configured as a Pi package through `package.json`:
 ```json
 {
   "pi": {
-    "extensions": ["./extensions"],
-    "skills": ["./skills"],
-    "prompts": ["./prompts"],
-    "themes": ["./themes"]
+    "extensions": ["./pi/extensions"],
+    "skills": ["./pi/skills"],
+    "prompts": ["./pi/prompts"],
+    "themes": ["./pi/themes"]
   }
 }
 ```
+
+The `pi/agents/` directory is loaded by the agents extension, not via the pi manifest.
 
 Pi can load it from this local path, a git repo, or npm if published later.
 
