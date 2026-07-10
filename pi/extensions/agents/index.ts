@@ -1,256 +1,96 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
-import {
-  AuthStorage,
-  createAgentSession,
-  DefaultResourceLoader,
-  ModelRegistry,
-  SessionManager,
-  SettingsManager,
-} from "@earendil-works/pi-coding-agent";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-import { readFile, readdir } from "node:fs/promises";
+/**
+ * Agents Extension — Persona-based agent delegation for pi.
+ *
+ * Three invocation paths:
+ *   - /agent:<name> [task]  — replace current session persona
+ *   - /agent:default        — revert to pi's built-in default persona
+ *   - --agent <name>         — CLI flag to start session with a persona
+ *   - agent("name", task)    — tool the LLM can call to delegate to a sub-agent
+ *
+ * Agent definitions are markdown files with YAML frontmatter, discovered from:
+ *   1. .pi/agents/*.md         (cwd + ancestors)
+ *   2. .agents/agents/*.md     (cwd + ancestors)
+ *   3. pi/agents/*.md          (config repo)
+ *   4. ~/.pi/agent/agents/*.md (global)
+ */
 
-import { AgentDefinition } from "./agent-definition";
-import { MarkdownAgentLoader } from "./agent-loader";
-import { AgentRegistry } from "./agent-registry";
-import { AgentModelResolver } from "./agent-model-resolver";
-import { AgentRunner, type AgentRunnerContext } from "./agent-runner";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { discoverAgents, formatAgentList } from "./src/agent-loader";
+import { AgentRunner } from "./src/agent-runner";
+import { registerAgentTool } from "./src/agent-tool";
 
-export default async function (pi: ExtensionAPI) {
-  // ── Resolve paths ────────────────────────────────────────────
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-  const agentsDir = resolve(__dirname, "..", "..", "agents");
+export default function (pi: ExtensionAPI) {
+  const runner = new AgentRunner();
 
-  // ── Load agent definitions ───────────────────────────────────
-  const loader = new MarkdownAgentLoader(
-    (path: string) => readFile(path, "utf-8"),
-    (path: string) => readdir(path),
-  );
-  const { registry, errors: loadErrors } = await AgentRegistry.fromLoader(loader, agentsDir);
+  // ── CLI flag: --agent <name> ─────────────────────────────
 
-  // ── Load model aliases ───────────────────────────────────────
-  let modelResolver: AgentModelResolver;
-  try {
-    const modelsJson = await readFile(resolve(agentsDir, "models.json"), "utf-8");
-    modelResolver = AgentModelResolver.fromJson(modelsJson);
-  } catch {
-    modelResolver = new AgentModelResolver({});
-  }
-
-  // ── Auth & model infrastructure for sub-agents ──────────────
-  const authStorage = AuthStorage.create();
-  const modelRegistry = ModelRegistry.create(authStorage);
-
-  // ── Active agent state ───────────────────────────────────────
-  let activeAgent: AgentDefinition | undefined;
-  let activeAgentSource: "flag" | "command" | undefined;
-
-  // ── Agent runner context (sub-agent spawning) ────────────────
-  function createRunnerContext(ctx: ExtensionContext, parentTools: string[]): AgentRunnerContext {
-    return {
-      resolveModel(modelRef: string) {
-        const resolved = modelResolver.resolve(modelRef);
-        if (resolved.type === "concrete") return resolved;
-        return "inherit";
-      },
-      async runSubAgent(config) {
-        // Resolve model object
-        let modelObj;
-        if (config.model !== "inherit") {
-          modelObj = ctx.modelRegistry.find(config.model.provider, config.model.model);
-        }
-
-        const resourceLoader = new DefaultResourceLoader({
-          systemPromptOverride: () => config.systemPrompt,
-        });
-        await resourceLoader.reload();
-
-        const { session: subSession } = await createAgentSession({
-          model: modelObj,
-          tools: config.tools,
-          noTools: "builtin",
-          authStorage,
-          modelRegistry,
-          sessionManager: SessionManager.inMemory(),
-          settingsManager: SettingsManager.inMemory(),
-          resourceLoader,
-        });
-
-        // Collect output
-        let finalText = "";
-        let turns = 0;
-        let error: string | undefined;
-
-        subSession.subscribe((event) => {
-          if (event.type === "turn_end") {
-            turns++;
-          }
-          if (
-            event.type === "message_update" &&
-            event.assistantMessageEvent.type === "text_delta"
-          ) {
-            finalText += event.assistantMessageEvent.delta;
-          }
-        });
-
-        try {
-          await subSession.prompt(config.task);
-        } catch (err) {
-          error = err instanceof Error ? err.message : String(err);
-        } finally {
-          subSession.dispose();
-        }
-
-        return {
-          text: finalText.trim(),
-          turns,
-          truncated: config.maxTurns ? turns >= config.maxTurns : false,
-          error,
-        };
-      },
-    };
-  }
-
-  // ── Apply agent to main session ─────────────────────────────
-  async function applyAgent(
-    def: AgentDefinition,
-    ctx: ExtensionContext,
-    source: "flag" | "command",
-  ): Promise<void> {
-    activeAgent = def;
-    activeAgentSource = source;
-
-    // Set model
-    const resolved = modelResolver.resolve(def.model);
-    if (resolved.type === "concrete") {
-      const model = ctx.modelRegistry.find(resolved.provider, resolved.model);
-      if (model) {
-        await pi.setModel(model);
-      }
-    }
-
-    // Set tools
-    const parentTools = pi.getActiveTools();
-    const effectiveTools = def.resolveTools(parentTools);
-    pi.setActiveTools(effectiveTools);
-  }
-
-  // ── Register --agent flag ────────────────────────────────────
   pi.registerFlag("agent", {
-    description: "Run session as a specific agent",
+    description: "Start the session with a specific agent persona",
     type: "string",
   });
 
-  // ── session_start: handle --agent flag ──────────────────────
+  // ── Session start: register commands + apply CLI agent ───
+
   pi.on("session_start", async (_event, ctx) => {
-    const agentName = pi.getFlag("agent");
-    if (agentName && typeof agentName === "string") {
-      const def = registry.get(agentName);
-      if (def) {
-        await applyAgent(def, ctx, "flag");
+    const agents = discoverAgents(ctx.cwd);
+
+    // Register /agent:default command
+    pi.registerCommand("agent:default", {
+      description: "Revert to pi's built-in default persona",
+      handler: async (_args, cmdCtx) => {
+        await runner.clear(pi, cmdCtx);
+        cmdCtx.ui.notify("Reverted to default agent", "info");
+      },
+    });
+
+    // Register /agent:<name> commands for each discovered agent
+    for (const agent of agents) {
+      pi.registerCommand(`agent:${agent.name}`, {
+        description: agent.description,
+        handler: async (args, cmdCtx) => {
+          await runner.apply(agent, pi, cmdCtx);
+          cmdCtx.ui.notify(`Agent persona: ${agent.name}`, "info");
+
+          // If user provided a task as args, send it as a user message
+          if (args && args.trim()) {
+            pi.sendUserMessage(args.trim());
+          }
+        },
+      });
+    }
+
+    // Apply CLI agent if --agent flag was set
+    const flagValue = pi.getFlag("agent");
+    if (typeof flagValue === "string" && flagValue.trim()) {
+      const cliAgentName = flagValue.trim();
+      const agent = agents.find((a) => a.name === cliAgentName);
+
+      if (agent) {
+        await runner.apply(agent, pi, ctx);
+        ctx.ui.notify(`Agent persona: ${agent.name}`, "info");
       } else {
         ctx.ui.notify(
-          `Agent "${agentName}" not found. Available: ${registry.names.join(", ")}`,
+          `Unknown agent "${cliAgentName}". Available: ${formatAgentList(agents)}`,
           "warning",
         );
       }
     }
-
-    // Log load errors
-    for (const err of loadErrors) {
-      ctx.ui.notify(`Agent load error in ${err.file}: ${err.message}`, "error");
-    }
   });
 
-  // ── Register /agent:name commands ────────────────────────────
-  for (const def of registry.list()) {
-    pi.registerCommand(`agent:${def.name}`, {
-      description: def.description,
-      handler: async (args, ctx) => {
-        await applyAgent(def, ctx, "command");
+  // ── before_agent_start: inject agent system prompt ───────
 
-        const msg = `Now running as ${def.name}`;
-        if (args) {
-          ctx.ui.notify(`${msg}. Sending: "${args}"`, "info");
-          pi.sendUserMessage(args);
-        } else {
-          ctx.ui.notify(msg, "info");
-        }
-      },
-    });
-  }
+  pi.on("before_agent_start", async (_event, _ctx) => {
+    if (!runner.isActive()) return;
 
-  // ── before_agent_start: inject agent system prompt ─────────
-  pi.on("before_agent_start", async (event, _ctx) => {
-    if (activeAgent) {
-      // Prepend the agent's system prompt to the existing one
-      return {
-        systemPrompt: activeAgent.systemPrompt + "\n\n---\n\n" + event.systemPrompt,
-      };
-    }
+    const agent = runner.getActive();
+    if (!agent) return;
+
+    return {
+      systemPrompt: agent.systemPrompt,
+    };
   });
 
-  // ── Register agent tool for automatic delegation ────────────
-  pi.registerTool({
-    name: "agent",
-    label: "Agent",
-    description: `Delegate a task to a specialized agent. Available agents: ${registry
-      .list()
-      .map((d) => `${d.name} — ${d.description}`)
-      .join("; ")}`,
-    promptSnippet: "Delegate a task to a specialized agent",
-    promptGuidelines: [
-      `Use the agent tool to delegate tasks to specialized agents. Available agents: ${registry
-        .list()
-        .map((d) => d.name)
-        .join(", ")}. Each agent has a specific focus and tool set.`,
-    ],
-    parameters: Type.Object({
-      agent: Type.String({ description: `Name of the agent to delegate to` }),
-      task: Type.String({ description: "Detailed task description for the agent" }),
-    }),
-    async execute(toolCallId, params, signal, _onUpdate, ctx) {
-      const def = registry.get(params.agent);
-      if (!def) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Agent "${params.agent}" not found. Available agents: ${registry.names.join(", ")}`,
-            },
-          ],
-        };
-      }
+  // ── Tool: agent(name, task) for LLM delegation ───────────
 
-      const parentTools = pi.getActiveTools();
-      const runner = new AgentRunner(def, modelResolver, parentTools);
-      const runnerCtx = createRunnerContext(ctx, parentTools);
-
-      const result = await runner.run(params.task, runnerCtx);
-
-      if (result.error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Agent ${def.name} encountered an error: ${result.error}`,
-            },
-          ],
-        };
-      }
-
-      let responseText = result.text || "(agent produced no output)";
-      if (result.truncated) {
-        responseText += `\n\n[Agent reached max turns (${def.maxTurns}) and was truncated.]`;
-      }
-
-      return {
-        content: [{ type: "text", text: responseText }],
-        details: { agentName: def.name, turns: result.turns, truncated: result.truncated },
-      };
-    },
-  });
+  registerAgentTool(pi);
 }

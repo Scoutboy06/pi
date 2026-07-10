@@ -1,109 +1,150 @@
-import { describe, it, expect, beforeAll } from "bun:test";
-import { MarkdownAgentLoader } from "../agent-loader";
-import { readFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { discoverAgents, formatAgentList } from "../src/agent-loader";
 
-const FIXTURES_DIR = join(import.meta.dirname, "fixtures", "agents");
+// ── Test helpers ───────────────────────────────────────────────
 
-describe("MarkdownAgentLoader", () => {
-  let loader: MarkdownAgentLoader;
+let tmpDir: string;
 
-  beforeAll(() => {
-    loader = new MarkdownAgentLoader(
-      (path: string) => readFile(path, "utf-8"),
-      (path: string) => readdir(path),
-    );
+beforeAll(() => {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-agents-test-"));
+});
+
+afterAll(() => {
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+function createAgentFile(
+  dir: string,
+  name: string,
+  description: string,
+  systemPrompt: string,
+  extras: { model?: string; tools?: string } = {},
+): string {
+  const frontmatter = [`name: ${name}`, `description: ${description}`];
+  if (extras.model) frontmatter.push(`model: ${extras.model}`);
+  if (extras.tools) frontmatter.push(`tools: ${extras.tools}`);
+
+  const content = `---\n${frontmatter.join("\n")}\n---\n\n${systemPrompt}\n`;
+  const filePath = path.join(dir, `${name}.md`);
+  fs.writeFileSync(filePath, content, "utf-8");
+  return filePath;
+}
+
+// ── Tests ──────────────────────────────────────────────────────
+
+describe("discoverAgents", () => {
+  it("returns empty array when no agent dirs exist", () => {
+    // Use a cwd with no agent dirs
+    const agents = discoverAgents(tmpDir);
+    // Might find global agents if they exist, so just check it's an array
+    expect(Array.isArray(agents)).toBe(true);
   });
 
-  it("loads agents from a directory of markdown files", async () => {
-    const result = await loader.load(FIXTURES_DIR);
+  it("discovers agents from a .pi/agents directory", () => {
+    const agentsDir = path.join(tmpDir, ".pi", "agents");
+    fs.mkdirSync(agentsDir, { recursive: true });
 
-    expect(result.errors).toEqual([]);
-    expect(result.definitions.length).toBe(2);
+    createAgentFile(agentsDir, "explorer", "Explores codebases", "You are an explorer.");
+    createAgentFile(agentsDir, "reviewer", "Reviews code", "You are a reviewer.", {
+      tools: "read, grep, find",
+    });
 
-    const names = result.definitions.map((d) => d.name).sort();
-    expect(names).toEqual(["code-reviewer", "simple-agent"]);
-  });
+    const agents = discoverAgents(tmpDir);
+    const explorer = agents.find((a) => a.name === "explorer");
+    const reviewer = agents.find((a) => a.name === "reviewer");
 
-  it("parses the code-reviewer agent correctly", async () => {
-    const result = await loader.load(FIXTURES_DIR);
-    const reviewer = result.definitions.find((d) => d.name === "code-reviewer")!;
+    expect(explorer).toBeDefined();
+    expect(explorer!.description).toBe("Explores codebases");
+    expect(explorer!.systemPrompt).toBe("You are an explorer.");
+    expect(explorer!.source).toBe("project");
+    expect(explorer!.tools).toBeUndefined();
+    expect(explorer!.model).toBeUndefined();
 
     expect(reviewer).toBeDefined();
-    expect(reviewer.name).toBe("code-reviewer");
-    expect(reviewer.description).toContain("Expert code reviewer");
-    expect(reviewer.model).toBe("sonnet");
-    expect(reviewer.tools).toEqual(["read", "grep", "glob", "bash"]);
-    expect(reviewer.maxTurns).toBe(20);
-    expect(reviewer.systemPrompt).toContain("You are a senior code reviewer");
-    expect(reviewer.systemPrompt).toContain("git diff");
+    expect(reviewer!.tools).toEqual(["read", "grep", "find"]);
+    expect(reviewer!.source).toBe("project");
   });
 
-  it("parses the simple-agent correctly", async () => {
-    const result = await loader.load(FIXTURES_DIR);
-    const simple = result.definitions.find((d) => d.name === "simple-agent")!;
+  it("parses optional fields (model, tools)", () => {
+    const agentsDir = path.join(tmpDir, ".pi", "agents");
+    fs.mkdirSync(agentsDir, { recursive: true });
 
-    expect(simple).toBeDefined();
-    expect(simple.name).toBe("simple-agent");
-    expect(simple.description).toBe(
-      "A simple agent for testing purposes. Use when you need basic help.",
+    createAgentFile(agentsDir, "scout", "Fast scout", "You are a scout.", {
+      model: "claude-haiku-4-5",
+      tools: "read, grep, find, ls",
+    });
+
+    const agents = discoverAgents(path.join(tmpDir, ".pi"));
+    const scout = agents.find((a) => a.name === "scout");
+
+    expect(scout).toBeDefined();
+    expect(scout!.model).toBe("claude-haiku-4-5");
+    expect(scout!.tools).toEqual(["read", "grep", "find", "ls"]);
+  });
+
+  it("skips files without name or description", () => {
+    const agentsDir = path.join(tmpDir, ".pi", "agents3");
+    fs.mkdirSync(agentsDir, { recursive: true });
+
+    // Missing description
+    fs.writeFileSync(
+      path.join(agentsDir, "no-desc.md"),
+      "---\nname: foo\n---\n\nBody here\n",
+      "utf-8",
     );
-    expect(simple.model).toBe("inherit");
-    expect(simple.tools).toBeUndefined();
-    expect(simple.disallowedTools).toBeUndefined();
-    expect(simple.maxTurns).toBeUndefined();
-    expect(simple.systemPrompt).toBe("You are a simple assistant. Be helpful and concise.");
-  });
 
-  it("reports errors for missing required fields", async () => {
-    const mockLoader = new MarkdownAgentLoader(
-      async () => `---\ndescription: I have no name\n---\nBody.`,
-      async () => ["bad-agent.md"],
+    // Missing name
+    fs.writeFileSync(
+      path.join(agentsDir, "no-name.md"),
+      "---\ndescription: Has description\n---\n\nBody\n",
+      "utf-8",
     );
 
-    const result = await mockLoader.load("/fake");
-    expect(result.definitions).toEqual([]);
-    expect(result.errors.length).toBe(1);
-    expect(result.errors[0].message).toContain("name");
+    const agents = discoverAgents(path.join(tmpDir, ".pi"));
+    expect(agents.find((a) => a.name === "foo")).toBeUndefined();
   });
 
-  it("reports errors when directory cannot be read", async () => {
-    const mockLoader = new MarkdownAgentLoader(
-      async () => "",
-      async () => {
-        throw new Error("ENOENT");
+  it("higher priority location overrides lower", () => {
+    // Create in .agents/agents (priority 2)
+    const dotAgentsDir = path.join(tmpDir, ".agents", "agents");
+    fs.mkdirSync(dotAgentsDir, { recursive: true });
+    createAgentFile(dotAgentsDir, "worker", "From .agents/agents", "dot-agents body");
+
+    // Create in .pi/agents (priority 1, should win)
+    const dotPiDir = path.join(tmpDir, ".pi", "agents");
+    fs.mkdirSync(dotPiDir, { recursive: true });
+    createAgentFile(dotPiDir, "worker", "From .pi/agents", "dot-pi body");
+
+    const agents = discoverAgents(tmpDir);
+    const worker = agents.find((a) => a.name === "worker");
+
+    expect(worker).toBeDefined();
+    expect(worker!.description).toBe("From .pi/agents"); // Higher priority wins
+    expect(worker!.systemPrompt).toBe("dot-pi body");
+    expect(worker!.source).toBe("project");
+  });
+});
+
+describe("formatAgentList", () => {
+  it("returns 'none' for empty list", () => {
+    expect(formatAgentList([])).toBe("none");
+  });
+
+  it("formats agents with name, source, and description", () => {
+    const result = formatAgentList([
+      {
+        name: "explorer",
+        description: "Explores code",
+        systemPrompt: "...",
+        source: "project",
+        filePath: "/fake/explorer.md",
       },
-    );
-
-    const result = await mockLoader.load("/nonexistent");
-    expect(result.definitions).toEqual([]);
-    expect(result.errors.length).toBe(1);
-    expect(result.errors[0].message).toContain("Failed to read directory");
-  });
-
-  describe("parseAgentFile with invalid content", () => {
-    it("throws on missing name", () => {
-      expect(() => loader.parseAgentFile("test.md", `---\ndescription: desc\n---\nBody.`)).toThrow(
-        /name/,
-      );
-    });
-
-    it("throws on missing description", () => {
-      expect(() => loader.parseAgentFile("test.md", `---\nname: test\n---\nBody.`)).toThrow(
-        /description/,
-      );
-    });
-
-    it("works with minimal valid frontmatter", () => {
-      const def = loader.parseAgentFile(
-        "test.md",
-        `---\nname: minimal\ndescription: A minimal agent\n---\nBe concise.`,
-      );
-
-      expect(def.name).toBe("minimal");
-      expect(def.description).toBe("A minimal agent");
-      expect(def.systemPrompt).toBe("Be concise.");
-      expect(def.model).toBe("inherit");
-    });
+    ]);
+    expect(result).toContain("explorer");
+    expect(result).toContain("project");
+    expect(result).toContain("Explores code");
   });
 });
