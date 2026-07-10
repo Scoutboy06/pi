@@ -4,7 +4,7 @@
 
 This repository contains personal Pi configuration resources. All changes to the Pi configuration should be made here. This includes custom agents, skills, prompt templates, extensions, and themes.
 
-## Code conventions
+## Workflow
 
 - When writing code, regularly lint and test your code for errors.
 
