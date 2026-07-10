@@ -8,6 +8,9 @@ This repository contains personal Pi configuration resources. All changes to the
 
 - When writing code, regularly lint and test your code for errors.
 
+  - Lint: `bun lint` (auto-fix: `bun lint:fix`)
+  - Format: `bun fmt` (check: `bun fmt:check`)
+
 ## Git
 
-- When making a commit, *NEVER* include yourself as a co-author.
+- When making a commit, _NEVER_ include yourself as a co-author.

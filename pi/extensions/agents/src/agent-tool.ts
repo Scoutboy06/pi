@@ -34,7 +34,13 @@ export function registerAgentTool(pi: ExtensionAPI): void {
     ],
     parameters: AgentToolParams,
 
-    async execute(_toolCallId, params, signal, _onUpdate, ctx): Promise<{
+    async execute(
+      _toolCallId,
+      params,
+      signal,
+      _onUpdate,
+      ctx,
+    ): Promise<{
       content: Array<{ type: "text"; text: string }>;
       details: Record<string, unknown>;
       isError?: boolean;
@@ -86,8 +92,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
             ? `${args.task.slice(0, 60)}...`
             : args.task
           : "...";
-      let text =
-        theme.fg("toolTitle", theme.bold("agent ")) + theme.fg("accent", agentName);
+      let text = theme.fg("toolTitle", theme.bold("agent ")) + theme.fg("accent", agentName);
       text += `\n  ${theme.fg("dim", preview)}`;
       return new Text(text, 0, 0);
     },
@@ -96,9 +101,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
       const details = result.details as Record<string, unknown> | undefined;
       const agentName = (details?.agent as string) || "unknown";
       const isError = result.isError === true;
-      const icon = isError
-        ? theme.fg("error", "✗")
-        : theme.fg("success", "✓");
+      const icon = isError ? theme.fg("error", "✗") : theme.fg("success", "✓");
 
       if (expanded) {
         let text = `${icon} ${theme.fg("toolTitle", theme.bold(agentName))}`;
@@ -112,10 +115,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
 
       // Collapsed view
       const outputText = result.content[0]?.type === "text" ? result.content[0].text : "";
-      const preview =
-        outputText.length > 200
-          ? `${outputText.slice(0, 200)}...`
-          : outputText;
+      const preview = outputText.length > 200 ? `${outputText.slice(0, 200)}...` : outputText;
       let text = `${icon} ${theme.fg("toolTitle", theme.bold(agentName))}`;
       text += `\n${theme.fg("toolOutput", preview || "(no output)")}`;
       if (outputText.length > 200) {

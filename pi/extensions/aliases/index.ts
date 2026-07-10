@@ -14,9 +14,7 @@ type Handler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
 
 // ── Alias definitions ───────────────────────────────────────────
 
-const aliasDefs = [
-  { cmd: "new", aliases: ["clear", "reset"], wait: true },
-] as const;
+const aliasDefs = [{ cmd: "new", aliases: ["clear", "reset"], wait: true }] as const;
 
 // ── Target implementations ──────────────────────────────────────
 //

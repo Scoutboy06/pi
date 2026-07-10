@@ -4,34 +4,19 @@
   },
   "languages": {
     "TypeScript": {
-      "language_servers": [
-        "vtsls",
-        "oxlint",
-        "!typescript-language-server",
-        "..."
-      ],
+      "language_servers": ["vtsls", "oxlint", "!typescript-language-server", "..."],
       "formatter": {
         "language_server": { "name": "oxlint" }
       }
     },
     "TSX": {
-      "language_servers": [
-        "vtsls",
-        "oxlint",
-        "!typescript-language-server",
-        "..."
-      ],
+      "language_servers": ["vtsls", "oxlint", "!typescript-language-server", "..."],
       "formatter": {
         "language_server": { "name": "oxlint" }
       }
     },
     "JavaScript": {
-      "language_servers": [
-        "vtsls",
-        "oxlint",
-        "!typescript-language-server",
-        "..."
-      ],
+      "language_servers": ["vtsls", "oxlint", "!typescript-language-server", "..."],
       "formatter": {
         "language_server": { "name": "oxlint" }
       }

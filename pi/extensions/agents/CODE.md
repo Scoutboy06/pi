@@ -23,22 +23,22 @@ agents/
 
 ## Design Decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| Single extension for all invocation paths | Shared agent discovery and runner logic; agents and sub-agents are the same concept from different callers |
-| Persona persists until changed | `/agent:explorer` switches persona, `/agent:default` reverts — consistent mental model |
-| Sub-agent spawns separate pi process | Isolated context window, same approach as official subagent example |
-| No parallel/chain modes | Keeps it simple; complex workflows can use multiple tool calls |
-| Agent's system prompt replaces pi's default | The agent IS the persona — mixing defaults would dilute the role |
+| Decision                                    | Rationale                                                                                                  |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Single extension for all invocation paths   | Shared agent discovery and runner logic; agents and sub-agents are the same concept from different callers |
+| Persona persists until changed              | `/agent:explorer` switches persona, `/agent:default` reverts — consistent mental model                     |
+| Sub-agent spawns separate pi process        | Isolated context window, same approach as official subagent example                                        |
+| No parallel/chain modes                     | Keeps it simple; complex workflows can use multiple tool calls                                             |
+| Agent's system prompt replaces pi's default | The agent IS the persona — mixing defaults would dilute the role                                           |
 
 ## Invocation Paths
 
-| Path | Who invokes | What happens |
-|------|------------|--------------|
-| `/agent:<name> [task]` | User types it | Replaces current session persona (persistent) |
-| `/agent:default` | User types it | Reverts to pi's built-in default |
-| `--agent <name>` | CLI flag | Applies persona at session start |
-| `agent("name", task)` | LLM calls tool | Spawns isolated sub-agent, returns result |
+| Path                   | Who invokes    | What happens                                  |
+| ---------------------- | -------------- | --------------------------------------------- |
+| `/agent:<name> [task]` | User types it  | Replaces current session persona (persistent) |
+| `/agent:default`       | User types it  | Reverts to pi's built-in default              |
+| `--agent <name>`       | CLI flag       | Applies persona at session start              |
+| `agent("name", task)`  | LLM calls tool | Spawns isolated sub-agent, returns result     |
 
 ## Agent Definition Format
 
@@ -60,9 +60,9 @@ You are a codebase explorer. Your job is to search, discover, and understand cod
 
 ## Discovery Locations (priority order)
 
-| Priority | Location | Source label |
-|----------|----------|-------------|
-| 1 (highest) | `.pi/agents/*.md` (cwd + ancestors) | project |
-| 2 | `.agents/agents/*.md` (cwd + ancestors) | project |
-| 3 | `pi/agents/*.md` (config repo) | config |
-| 4 (lowest) | `~/.pi/agent/agents/*.md` | global |
+| Priority    | Location                                | Source label |
+| ----------- | --------------------------------------- | ------------ |
+| 1 (highest) | `.pi/agents/*.md` (cwd + ancestors)     | project      |
+| 2           | `.agents/agents/*.md` (cwd + ancestors) | project      |
+| 3           | `pi/agents/*.md` (config repo)          | config       |
+| 4 (lowest)  | `~/.pi/agent/agents/*.md`               | global       |

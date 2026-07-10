@@ -15,12 +15,12 @@ tests/
 
 ## Scenario matrix
 
-| Case | Behind | Ahead | Dirty | Conflict | Status |
-|------|--------|-------|-------|----------|--------|
-| A | >0 | 0 | No | — | `N updates — /update` |
-| B | 0 | * | * | — | _(nothing shown)_ |
-| C | >0 | >0 | No | No | `N updates (↑M ↓N) — /update` |
-| C | >0 | >0 | No | Yes | `N updates (↑M ↓N) — conflicts — resolve manually` |
-| D-A | >0 | 0 | Yes | — | `* N updates — /update` |
-| D-C | >0 | >0 | Yes | No | `* N updates (↑M ↓N) — /update` |
-| D-C | >0 | >0 | Yes | Yes | `* N updates (↑M ↓N) — conflicts — resolve manually` |
+| Case | Behind | Ahead | Dirty | Conflict | Status                                               |
+| ---- | ------ | ----- | ----- | -------- | ---------------------------------------------------- |
+| A    | >0     | 0     | No    | —        | `N updates — /update`                                |
+| B    | 0      | *     | *     | —        | _(nothing shown)_                                    |
+| C    | >0     | >0    | No    | No       | `N updates (↑M ↓N) — /update`                        |
+| C    | >0     | >0    | No    | Yes      | `N updates (↑M ↓N) — conflicts — resolve manually`   |
+| D-A  | >0     | 0     | Yes   | —        | `* N updates — /update`                              |
+| D-C  | >0     | >0    | Yes   | No       | `* N updates (↑M ↓N) — /update`                      |
+| D-C  | >0     | >0    | Yes   | Yes      | `* N updates (↑M ↓N) — conflicts — resolve manually` |

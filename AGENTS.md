@@ -21,10 +21,11 @@ The scope for each `CODE.md` file is the folder it resides in and all sub-folder
 ### Actions
 
 Before creating of modifying ANY file, locate all `CODE.md` files in scope:
+
 1. Start by looking in the affected file's folder
 2. Traverse up to repository root, locating `CODE.md` files along the way
-You MUST ALWAYS read `CODE.md` files fresh using the read tool - never rely on content from earlier in the conversation.
-You MUST look in EVERY folder along the path. You may NOT skip any folder.
+   You MUST ALWAYS read `CODE.md` files fresh using the read tool - never rely on content from earlier in the conversation.
+   You MUST look in EVERY folder along the path. You may NOT skip any folder.
 
 Combine all found `CODE.md` files into a single instruction block.
 If there are conflicting instructions, those that came from a file deeper in the structure take presedence.

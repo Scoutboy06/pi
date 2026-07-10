@@ -57,6 +57,8 @@ We use Bun test for testing our extensions. Follow these guidelines:
 When using `as` in TypeScript, you should always:
 
 1. prefer doing it another way. For example:
-  - `return foo as Bar` -> `): Bar {`
-  - `const bar = foo as Bar` -> `const bar: Bar = foo`
+
+- `return foo as Bar` -> `): Bar {`
+- `const bar = foo as Bar` -> `const bar: Bar = foo`
+
 2. If you must use `as`, ensure that the type assertion is safe and that it does not lead to any unexpected behavior. If you are unsure, consider using a type guard or a type predicate before assering it.
