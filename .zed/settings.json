@@ -1,0 +1,43 @@
+{
+  "auto_install_extensions": {
+    "oxc": true
+  },
+  "languages": {
+    "TypeScript": {
+      "language_servers": [
+        "vtsls",
+        "oxlint",
+        "!typescript-language-server",
+        "..."
+      ],
+      "formatter": {
+        "language_server": { "name": "oxlint" }
+      }
+    },
+    "TSX": {
+      "language_servers": [
+        "vtsls",
+        "oxlint",
+        "!typescript-language-server",
+        "..."
+      ],
+      "formatter": {
+        "language_server": { "name": "oxlint" }
+      }
+    },
+    "JavaScript": {
+      "language_servers": [
+        "vtsls",
+        "oxlint",
+        "!typescript-language-server",
+        "..."
+      ],
+      "formatter": {
+        "language_server": { "name": "oxlint" }
+      }
+    },
+    "JSON": {
+      "language_servers": ["json-language-server"]
+    }
+  }
+}
