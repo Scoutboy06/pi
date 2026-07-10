@@ -6,7 +6,7 @@ This repository contains personal Pi configuration resources. All changes to the
 
 ## Code conventions
 
-## Tests
+- When writing code, regularly lint and test your code for errors.
 
 ## Git
 
