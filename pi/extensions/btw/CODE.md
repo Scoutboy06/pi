@@ -38,14 +38,14 @@ btw/
 
 ### Design decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| Read-only tools (`read`, `grep`, `glob`, `ls`) | Safety for side queries |
-| Ephemeral session (`SessionManager.inMemory()`) | Never persisted to disk |
-| Same model as main session | Respects user's active model/agent |
-| Only `text_delta` events collected | Hides reasoning/thinking from the output |
-| 60-second timeout | Prevents runaway sub-agents |
-| Overlay, not inline | Matches Claude Code UX — separate dismissible window |
+| Decision                                        | Rationale                                            |
+| ----------------------------------------------- | ---------------------------------------------------- |
+| Read-only tools (`read`, `grep`, `glob`, `ls`)  | Safety for side queries                              |
+| Ephemeral session (`SessionManager.inMemory()`) | Never persisted to disk                              |
+| Same model as main session                      | Respects user's active model/agent                   |
+| Only `text_delta` events collected              | Hides reasoning/thinking from the output             |
+| 60-second timeout                               | Prevents runaway sub-agents                          |
+| Overlay, not inline                             | Matches Claude Code UX — separate dismissible window |
 
 ## Gotchas
 

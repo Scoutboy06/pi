@@ -85,7 +85,8 @@ export class MarkdownAgentLoader implements AgentDefinitionLoader {
         ? frontmatter.disallowedTools.filter((t): t is string => typeof t === "string")
         : undefined,
       maxTurns: typeof frontmatter.maxTurns === "number" ? frontmatter.maxTurns : undefined,
-      initialPrompt: typeof frontmatter.initialPrompt === "string" ? frontmatter.initialPrompt : undefined,
+      initialPrompt:
+        typeof frontmatter.initialPrompt === "string" ? frontmatter.initialPrompt : undefined,
       systemPrompt: body || "",
     });
   }

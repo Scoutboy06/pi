@@ -60,7 +60,10 @@ export class AgentModelResolver implements ModelAliasResolver {
     // Parse alias value as provider/model
     const slashIndex = resolved.indexOf("/");
     if (slashIndex === -1) {
-      return { type: "error", message: `Invalid alias value for "${modelRef}": "${resolved}" (expected provider/model)` };
+      return {
+        type: "error",
+        message: `Invalid alias value for "${modelRef}": "${resolved}" (expected provider/model)`,
+      };
     }
 
     const provider = resolved.slice(0, slashIndex);
@@ -72,7 +75,9 @@ export class AgentModelResolver implements ModelAliasResolver {
   static fromJson(json: string): AgentModelResolver {
     const parsed = JSON.parse(json);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      throw new Error("Model aliases must be a JSON object mapping alias names to provider/model strings");
+      throw new Error(
+        "Model aliases must be a JSON object mapping alias names to provider/model strings",
+      );
     }
     for (const [key, value] of Object.entries(parsed)) {
       if (typeof value !== "string") {

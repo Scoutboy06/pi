@@ -31,8 +31,7 @@ export function buildContextPrompt(
 
   const recent = entries.slice(-30);
 
-  let prompt =
-    "You are answering a **side query** (BTW) about the following conversation. ";
+  let prompt = "You are answering a **side query** (BTW) about the following conversation. ";
   prompt += "You have read-only tool access (read, grep, glob, ls). ";
   prompt += "Do NOT make any edits or run destructive commands. ";
   prompt += "Respond concisely — this is a quick side question.\n\n";

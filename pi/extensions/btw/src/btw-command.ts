@@ -1,7 +1,4 @@
-import type {
-  ExtensionAPI,
-  ExtensionCommandContext,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   AuthStorage,
   createAgentSession,
@@ -24,11 +21,7 @@ export class BtwCommand {
   /**
    * Execute a /btw side query: fork context → spawn sub-agent → show overlay.
    */
-  async execute(
-    question: string,
-    ctx: ExtensionCommandContext,
-    pi: ExtensionAPI,
-  ): Promise<void> {
+  async execute(question: string, ctx: ExtensionCommandContext, pi: ExtensionAPI): Promise<void> {
     let displayText: string;
 
     try {
@@ -74,16 +67,11 @@ export class BtwCommand {
     const contextPrompt = buildContextPrompt(entries);
 
     // ── 2. Build read-only tool list ─────────────────────────
-    const readOnlyTools = (pi.getActiveTools() ?? []).filter((name) =>
-      READ_ONLY_TOOLS.has(name),
-    );
+    const readOnlyTools = (pi.getActiveTools() ?? []).filter((name) => READ_ONLY_TOOLS.has(name));
 
     // ── 3. Show working status ───────────────────────────────
     if (ctx.mode === "tui" && ctx.ui.theme) {
-      ctx.ui.setStatus(
-        "btw",
-        ctx.ui.theme.fg("accent", "🤔 BTW: thinking…"),
-      );
+      ctx.ui.setStatus("btw", ctx.ui.theme.fg("accent", "🤔 BTW: thinking…"));
     }
 
     try {
@@ -113,10 +101,7 @@ export class BtwCommand {
       let finalText = "";
 
       subSession.subscribe((event) => {
-        if (
-          event.type === "message_update" &&
-          event.assistantMessageEvent.type === "text_delta"
-        ) {
+        if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
           finalText += event.assistantMessageEvent.delta;
         }
       });
@@ -125,10 +110,7 @@ export class BtwCommand {
         await Promise.race([
           subSession.prompt(question),
           new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error("BTW query timed out")),
-              BTW_TIMEOUT_MS,
-            ),
+            setTimeout(() => reject(new Error("BTW query timed out")), BTW_TIMEOUT_MS),
           ),
         ]);
       } finally {

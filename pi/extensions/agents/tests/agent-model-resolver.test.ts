@@ -97,7 +97,10 @@ describe("AgentModelResolver", () => {
     it("loads the actual models.json from fixtures", async () => {
       const { readFile } = await import("node:fs/promises");
       const { join } = await import("node:path");
-      const json = await readFile(join(import.meta.dirname, "fixtures", "agents", "models.json"), "utf-8");
+      const json = await readFile(
+        join(import.meta.dirname, "fixtures", "agents", "models.json"),
+        "utf-8",
+      );
 
       const resolver = AgentModelResolver.fromJson(json);
 

@@ -86,7 +86,11 @@ function parseYamlLike(text: string): Record<string, unknown> {
         if (baseIndent === null && blockLine !== "") {
           baseIndent = blockLine.length - blockTrimmed.length;
         }
-        if (baseIndent !== null && blockLine.length - blockTrimmed.length < baseIndent && blockTrimmed !== "") {
+        if (
+          baseIndent !== null &&
+          blockLine.length - blockTrimmed.length < baseIndent &&
+          blockTrimmed !== ""
+        ) {
           // Outdented: block ended
           break;
         }

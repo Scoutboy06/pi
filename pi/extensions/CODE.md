@@ -10,6 +10,7 @@ When developing extensions, it is important to maintain a clear and organized co
 
 - Plan your extension's architecture in terms of modules, classes, and functions, before writing any code.
 - Use a consistent directory structure for your extension. A common structure is:
+
 ```
 my-extension/
 ├── src/

@@ -2,11 +2,9 @@ import { describe, it, expect, mock, afterEach } from "bun:test";
 
 // Mock pi-tui before importing the overlay module
 mock.module("@earendil-works/pi-tui", () => ({
-  truncateToWidth: (s: string, w: number) =>
-    s.length > w ? s.slice(0, w) : s,
+  truncateToWidth: (s: string, w: number) => (s.length > w ? s.slice(0, w) : s),
   visibleWidth: (s: string) => s.length,
-  matchesKey: (data: string, key: string) =>
-    data === "\x1b" && key === "escape",
+  matchesKey: (data: string, key: string) => data === "\x1b" && key === "escape",
   Key: { escape: "escape" },
 }));
 
@@ -40,7 +38,8 @@ describe("renderBtwPopup", () => {
   });
 
   it("wraps long response lines to fit width", () => {
-    const longResponse = "This is a very long response that should be word wrapped across multiple lines in the overlay.";
+    const longResponse =
+      "This is a very long response that should be word wrapped across multiple lines in the overlay.";
     const lines = renderBtwPopup("q", longResponse, 40, theme);
 
     const bodyLines = lines.filter(

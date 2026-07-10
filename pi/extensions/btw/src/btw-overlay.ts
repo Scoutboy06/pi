@@ -51,10 +51,7 @@ export function renderBtwPopup(
       for (const line of wrapLine(rawLine, innerWidth)) {
         const pad = Math.max(0, innerWidth - visibleWidth(line));
         lines.push(
-          theme.fg("borderAccent", "│ ") +
-            line +
-            " ".repeat(pad) +
-            theme.fg("borderAccent", " │"),
+          theme.fg("borderAccent", "│ ") + line + " ".repeat(pad) + theme.fg("borderAccent", " │"),
         );
       }
     }
@@ -62,10 +59,7 @@ export function renderBtwPopup(
     const empty = theme.fg("muted", "(no response)");
     const pad = Math.max(0, innerWidth - visibleWidth(empty));
     lines.push(
-      theme.fg("borderAccent", "│ ") +
-        empty +
-        " ".repeat(pad) +
-        theme.fg("borderAccent", " │"),
+      theme.fg("borderAccent", "│ ") + empty + " ".repeat(pad) + theme.fg("borderAccent", " │"),
     );
   }
 
@@ -113,12 +107,7 @@ export class BtwOverlay implements Component {
     if (this.cachedLines && this.cachedWidth === width) {
       return this.cachedLines;
     }
-    this.cachedLines = renderBtwPopup(
-      this.question,
-      this.response,
-      width,
-      this.theme,
-    );
+    this.cachedLines = renderBtwPopup(this.question, this.response, width, this.theme);
     this.cachedWidth = width;
     return this.cachedLines;
   }

@@ -88,7 +88,10 @@ export default async function (pi: ExtensionAPI) {
           if (event.type === "turn_end") {
             turns++;
           }
-          if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+          if (
+            event.type === "message_update" &&
+            event.assistantMessageEvent.type === "text_delta"
+          ) {
             finalText += event.assistantMessageEvent.delta;
           }
         });
@@ -194,10 +197,16 @@ export default async function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "agent",
     label: "Agent",
-    description: `Delegate a task to a specialized agent. Available agents: ${registry.list().map((d) => `${d.name} — ${d.description}`).join("; ")}`,
+    description: `Delegate a task to a specialized agent. Available agents: ${registry
+      .list()
+      .map((d) => `${d.name} — ${d.description}`)
+      .join("; ")}`,
     promptSnippet: "Delegate a task to a specialized agent",
     promptGuidelines: [
-      `Use the agent tool to delegate tasks to specialized agents. Available agents: ${registry.list().map((d) => d.name).join(", ")}. Each agent has a specific focus and tool set.`,
+      `Use the agent tool to delegate tasks to specialized agents. Available agents: ${registry
+        .list()
+        .map((d) => d.name)
+        .join(", ")}. Each agent has a specific focus and tool set.`,
     ],
     parameters: Type.Object({
       agent: Type.String({ description: `Name of the agent to delegate to` }),

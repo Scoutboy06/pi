@@ -2,7 +2,10 @@ import { describe, it, expect } from "bun:test";
 import { AgentRegistry } from "../agent-registry";
 import { AgentDefinition } from "../agent-definition";
 
-function makeDef(name: string, opts?: Partial<{ description: string; tools: string[] }>): AgentDefinition {
+function makeDef(
+  name: string,
+  opts?: Partial<{ description: string; tools: string[] }>,
+): AgentDefinition {
   return new AgentDefinition({
     name,
     description: opts?.description ?? `${name} description`,
@@ -13,10 +16,7 @@ function makeDef(name: string, opts?: Partial<{ description: string; tools: stri
 
 describe("AgentRegistry", () => {
   it("stores and retrieves agents by name", () => {
-    const registry = new AgentRegistry([
-      makeDef("reviewer"),
-      makeDef("debugger"),
-    ]);
+    const registry = new AgentRegistry([makeDef("reviewer"), makeDef("debugger")]);
 
     expect(registry.get("reviewer")?.name).toBe("reviewer");
     expect(registry.get("debugger")?.name).toBe("debugger");
@@ -24,11 +24,7 @@ describe("AgentRegistry", () => {
   });
 
   it("lists all agents", () => {
-    const registry = new AgentRegistry([
-      makeDef("a"),
-      makeDef("b"),
-      makeDef("c"),
-    ]);
+    const registry = new AgentRegistry([makeDef("a"), makeDef("b"), makeDef("c")]);
 
     expect(registry.list()).toHaveLength(3);
     expect(registry.size).toBe(3);

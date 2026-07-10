@@ -45,7 +45,9 @@ describe("MarkdownAgentLoader", () => {
 
     expect(simple).toBeDefined();
     expect(simple.name).toBe("simple-agent");
-    expect(simple.description).toBe("A simple agent for testing purposes. Use when you need basic help.");
+    expect(simple.description).toBe(
+      "A simple agent for testing purposes. Use when you need basic help.",
+    );
     expect(simple.model).toBe("inherit");
     expect(simple.tools).toBeUndefined();
     expect(simple.disallowedTools).toBeUndefined();
@@ -81,15 +83,15 @@ describe("MarkdownAgentLoader", () => {
 
   describe("parseAgentFile with invalid content", () => {
     it("throws on missing name", () => {
-      expect(() =>
-        loader.parseAgentFile("test.md", `---\ndescription: desc\n---\nBody.`),
-      ).toThrow(/name/);
+      expect(() => loader.parseAgentFile("test.md", `---\ndescription: desc\n---\nBody.`)).toThrow(
+        /name/,
+      );
     });
 
     it("throws on missing description", () => {
-      expect(() =>
-        loader.parseAgentFile("test.md", `---\nname: test\n---\nBody.`),
-      ).toThrow(/description/);
+      expect(() => loader.parseAgentFile("test.md", `---\nname: test\n---\nBody.`)).toThrow(
+        /description/,
+      );
     });
 
     it("works with minimal valid frontmatter", () => {
