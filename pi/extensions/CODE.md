@@ -49,3 +49,14 @@ We use Bun test for testing our extensions. Follow these guidelines:
 - Use mocks and stubs to isolate the code being tested from external dependencies.
 - Write integration tests for classes and functions that interact with external systems or APIs.
 - The goal of testing is to mock a complete environment for the extension, all the way from the extension's entry point to the external systems it interacts with. This ensures that your extension behaves correctly in a real-world scenario.
+
+### TypeScript
+
+#### using `as`
+
+When using `as` in TypeScript, you should always:
+
+1. prefer doing it another way. For example:
+  - `return foo as Bar` -> `): Bar {`
+  - `const bar = foo as Bar` -> `const bar: Bar = foo`
+2. If you must use `as`, ensure that the type assertion is safe and that it does not lead to any unexpected behavior. If you are unsure, consider using a type guard or a type predicate before assering it.
