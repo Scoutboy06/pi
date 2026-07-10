@@ -13,23 +13,6 @@ tests/
   update-command.test.ts   # Unit tests for UpdateCommand.execute
 ```
 
-## Design
-
-### GitClient (interface)
-
-Abstraction over git operations. The real implementation (`PiExecGitClient`) delegates to `pi.exec`. Tests inject a mock implementation so no real git repo is needed.
-
-### GitChecker
-
-- `check()`: finds repo root, fetches, computes divergence/dirty/conflict status. Returns null when there's nothing to pull.
-- `formatStatus()`: pure function mapping `RepoStatus` → status string according to the scenario matrix.
-- `displayResult()`: updates footer status + shows one-time toast notification.
-
-### UpdateCommand
-
-- `/update` handler: checks status, pulls if clean, reloads on success.
-- Refuses to pull when merge conflicts are detected.
-
 ## Scenario matrix
 
 | Case | Behind | Ahead | Dirty | Conflict | Status |
