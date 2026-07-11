@@ -1,0 +1,28 @@
+#!/bin/sh
+set -e
+
+# ── Stash unstaged changes so auto-fixers only touch staged state ──
+stashed=0
+if ! git diff --quiet; then
+  git stash push -q --keep-index
+  stashed=1
+fi
+
+cleanup() {
+  if [ "$stashed" = "1" ]; then
+    git stash pop -q || echo "husky - stash pop had conflicts; unstaged changes may need manual resolution" >&2
+  fi
+}
+trap cleanup EXIT
+
+# ── Auto-fix staged files ──
+bun fmt
+bun lint:fix
+
+# ── Re-stage any changes from auto-fixers ──
+git diff --cached --name-only -z | xargs -0 git add
+
+# ── Verification gates (run against staged state only) ──
+bun fmt:check
+bun lint
+bun typecheck

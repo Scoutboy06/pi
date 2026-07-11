@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+
+bun fmt:check
+bun lint
+bun typecheck
