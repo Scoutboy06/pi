@@ -16,5 +16,5 @@
     // Typecheck only — no emit
     "noEmit": true
   },
-  "include": ["pi/**/*.ts"]
+  "include": ["src/**/*.ts"]
 }

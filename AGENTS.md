@@ -2,6 +2,27 @@
 
 This repository contains personal Pi configuration resources. All changes to the Pi configuration should be made here. This includes custom agents, skills, prompt templates, extensions, and themes.
 
+## Project Structure
+
+```
+.
+├── AGENTS.md
+├── package.json
+├── README.md
+├──src/
+│   ├── agents/          # Custom agent definitions (personas)
+│   ├── extensions/      # Extensions: tools, commands, hooks, UI
+│   │   ├── agents/      #   agent loading & delegation
+│   │   ├── aliases/     #   command aliases
+│   │   ├── btw/         #   /btw side-query command
+│   │   └── git-updater/ #  background git checker + /update
+│   ├── prompts/         # Prompt templates (slash commands)
+│   ├── skills/          # Pi-specific agent skills
+│   ├── skills/          # Pi-specific agent skills
+│   └── lib/             # Shared utility code (not loaded by pi)
+└── tsconfig.json
+```
+
 ## Conventions
 
 - Keep general, cross-agent skills in the dotfiles-managed skills repo, not here.
