@@ -31,6 +31,29 @@ pi --agent explorer "Explore the codebase structure"
 
 The model can call the `agent` tool to delegate focused tasks to specialized personas. Each sub-agent runs in an isolated process with its own context window.
 
+**Modes:**
+
+| Mode     | Parameters                           | Description                                            |
+| -------- | ------------------------------------ | ------------------------------------------------------ |
+| Single   | `{ agent, task }`                    | One agent, one task                                    |
+| Parallel | `{ tasks: [{ agent, task, cwd? }] }` | Multiple agents run concurrently (max 8, 4 concurrent) |
+| Chain    | `{ chain: [{ agent, task, cwd? }] }` | Sequential execution with `{previous}` placeholder     |
+
+**Scope control:**
+
+- `agentScope: "user"` — only global agents (`~/.pi/agent/agents/`, `pi/agents/`)
+- `agentScope: "project"` — only project-local agents (`.pi/agents/`, `.agents/agents/`)
+- `agentScope: "both"` — all locations, project overrides user (default for session persona, not for tool)
+- Default tool scope is `"user"` for safety
+
+**Security:** When `agentScope` includes project agents, the tool prompts for confirmation before running project-local agents. Set `confirmProjectAgents: false` to disable.
+
+**Output display:**
+
+- **Collapsed view:** Status icon, agent name, last 10 tool calls/text items, usage stats (tokens, cost, turns, context)
+- **Expanded view (Ctrl+O):** Full task text, all tool calls with formatted arguments (bash/read/write/edit/ls/find/grep), final output rendered as Markdown, per-task usage stats, aggregate totals
+- **Streaming:** Live progress updates ("running...", "2/3 done, 1 running")
+
 ## Agent Definition Format
 
 Create `.md` files with YAML frontmatter:

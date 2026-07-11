@@ -28,17 +28,17 @@ agents/
 | Single extension for all invocation paths   | Shared agent discovery and runner logic; agents and sub-agents are the same concept from different callers |
 | Persona persists until changed              | `/agent:explorer` switches persona, `/agent:default` reverts — consistent mental model                     |
 | Sub-agent spawns separate pi process        | Isolated context window, same approach as official subagent example                                        |
-| No parallel/chain modes                     | Keeps it simple; complex workflows can use multiple tool calls                                             |
+| Parallel/chain modes for tool delegation    | Enables complex multi-agent workflows; same approach as official subagent example                          |
 | Agent's system prompt replaces pi's default | The agent IS the persona — mixing defaults would dilute the role                                           |
 
 ## Invocation Paths
 
-| Path                   | Who invokes    | What happens                                  |
-| ---------------------- | -------------- | --------------------------------------------- |
-| `/agent:<name> [task]` | User types it  | Replaces current session persona (persistent) |
-| `/agent:default`       | User types it  | Reverts to pi's built-in default              |
-| `--agent <name>`       | CLI flag       | Applies persona at session start              |
-| `agent("name", task)`  | LLM calls tool | Spawns isolated sub-agent, returns result     |
+| Path                   | Who invokes    | What happens                                                    |
+| ---------------------- | -------------- | --------------------------------------------------------------- |
+| `/agent:<name> [task]` | User types it  | Replaces current session persona (persistent)                   |
+| `/agent:default`       | User types it  | Reverts to pi's built-in default                                |
+| `--agent <name>`       | CLI flag       | Applies persona at session start                                |
+| `agent("name", task)`  | LLM calls tool | Spawns isolated sub-agent, supports single/parallel/chain modes |
 
 ## Agent Definition Format
 

@@ -9,6 +9,11 @@
  *
  * Project agents override global agents with the same name.
  * Within the same scope, first discovered wins.
+ *
+ * Scope control via AgentScope:
+ *   - "user":    only global (~/.pi/agent/agents/) and config repo (pi/agents/)
+ *   - "project": only project-local (.pi/agents/, .agents/agents/)
+ *   - "both":    all locations, project overrides user (default for session persona)
  */
 
 import * as fs from "node:fs";
@@ -16,6 +21,8 @@ import * as path from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 
 // ── Types ──────────────────────────────────────────────────────
+
+export type AgentScope = "user" | "project" | "both";
 
 export interface AgentConfig {
   name: string;
@@ -25,6 +32,11 @@ export interface AgentConfig {
   systemPrompt: string;
   source: "project" | "config" | "global";
   filePath: string;
+}
+
+export interface AgentDiscoveryResult {
+  agents: AgentConfig[];
+  projectAgentsDir: string | null;
 }
 
 // ── Frontmatter parsing ───────────────────────────────────────
@@ -122,44 +134,71 @@ function findUp(startDir: string, relativePath: string): string | null {
   }
 }
 
-// ── Main discovery ─────────────────────────────────────────────
+/**
+ * Find the nearest .pi/agents/ directory by walking up from cwd.
+ * Used for project agent security confirmation (showing the source directory).
+ */
+function findNearestProjectAgentsDir(cwd: string): string | null {
+  return findUp(cwd, `${CONFIG_DIR_NAME}/agents`);
+}
 
-export function discoverAgents(cwd: string): AgentConfig[] {
+// ── Scoped discovery ───────────────────────────────────────────
+
+/**
+ * Discover agents with scope control.
+ *
+ * Session persona commands (/agent:name, --agent) use full discovery (no scope param)
+ * to always include all locations. The tool uses scope control for security.
+ */
+export function discoverAgentsScoped(cwd: string, scope: AgentScope): AgentDiscoveryResult {
+  const globalDir = path.join(getAgentDir(), "agents");
+  const projectAgentsDir = findNearestProjectAgentsDir(cwd);
+  const dotAgentsDir = findUp(cwd, ".agents/agents");
+  const configAgentsDir = findUp(cwd, "pi/agents");
+
   const agentMap = new Map<string, AgentConfig>();
 
-  // Low to high priority — later entries override earlier ones
-
-  // 4. Global: ~/.pi/agent/agents/
-  const globalDir = path.join(getAgentDir(), "agents");
-  for (const agent of loadAgentsFromDir(globalDir, "global")) {
-    agentMap.set(agent.name, agent);
-  }
-
-  // 3. Config repo: pi/agents/ (walk up from cwd)
-  const configAgentsDir = findUp(cwd, "pi/agents");
-  if (configAgentsDir) {
-    for (const agent of loadAgentsFromDir(configAgentsDir, "config")) {
+  // User-scoped sources (global + config repo)
+  if (scope === "user" || scope === "both") {
+    // Global: ~/.pi/agent/agents/
+    for (const agent of loadAgentsFromDir(globalDir, "global")) {
       agentMap.set(agent.name, agent);
+    }
+
+    // Config repo: pi/agents/
+    if (configAgentsDir) {
+      for (const agent of loadAgentsFromDir(configAgentsDir, "config")) {
+        agentMap.set(agent.name, agent);
+      }
     }
   }
 
-  // 2. .agents/agents/ (cwd + ancestors)
-  const dotAgentsDir = findUp(cwd, ".agents/agents");
-  if (dotAgentsDir) {
-    for (const agent of loadAgentsFromDir(dotAgentsDir, "project")) {
-      agentMap.set(agent.name, agent);
+  // Project-scoped sources
+  if (scope === "project" || scope === "both") {
+    // .agents/agents/ (lower priority among project sources)
+    if (dotAgentsDir) {
+      for (const agent of loadAgentsFromDir(dotAgentsDir, "project")) {
+        agentMap.set(agent.name, agent);
+      }
+    }
+
+    // .pi/agents/ (highest priority)
+    if (projectAgentsDir) {
+      for (const agent of loadAgentsFromDir(projectAgentsDir, "project")) {
+        agentMap.set(agent.name, agent);
+      }
     }
   }
 
-  // 1. .pi/agents/ (cwd + ancestors) — highest priority
-  const dotPiAgentsDir = findUp(cwd, `${CONFIG_DIR_NAME}/agents`);
-  if (dotPiAgentsDir) {
-    for (const agent of loadAgentsFromDir(dotPiAgentsDir, "project")) {
-      agentMap.set(agent.name, agent);
-    }
-  }
+  return { agents: Array.from(agentMap.values()), projectAgentsDir };
+}
 
-  return Array.from(agentMap.values());
+/**
+ * Full discovery — all locations, no scope filter.
+ * Used for session persona commands (/agent:name, --agent).
+ */
+export function discoverAgents(cwd: string): AgentConfig[] {
+  return discoverAgentsScoped(cwd, "both").agents;
 }
 
 // ── Formatting ─────────────────────────────────────────────────

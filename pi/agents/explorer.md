@@ -1,7 +1,7 @@
 ---
 name: explorer
 description: Fast, read-only agent for searching and exploring codebases. Use proactively for file discovery, code search, and codebase exploration.
-model: deepseek-v4-flash
+model: deepseek/deepseek-v4-flash
 tools: read, grep, glob, ls
 ---
 
