@@ -4,14 +4,14 @@
  * Scans for agent definitions (*.md files with YAML frontmatter) from:
  *   1. .pi/agents/*.md        (cwd + ancestors) — highest priority
  *   2. .agents/agents/*.md    (cwd + ancestors)
- *   3. pi/agents/*.md         (config repo, found by walking up from cwd)
+ *   3. src/agents/*.md        (config repo, found by walking up from cwd)
  *   4. ~/.pi/agent/agents/*.md (global) — lowest priority
  *
  * Project agents override global agents with the same name.
  * Within the same scope, first discovered wins.
  *
  * Scope control via AgentScope:
- *   - "user":    only global (~/.pi/agent/agents/) and config repo (pi/agents/)
+ *   - "user":    only global (~/.pi/agent/agents/) and config repo (src/agents/)
  *   - "project": only project-local (.pi/agents/, .agents/agents/)
  *   - "both":    all locations, project overrides user (default for session persona)
  */
@@ -163,7 +163,7 @@ export function discoverAgentsScoped(cwd: string, scope: AgentScope): AgentDisco
   const globalDir = path.join(getAgentDir(), "agents");
   const projectAgentsDir = findNearestProjectAgentsDir(cwd);
   const dotAgentsDir = findUp(cwd, ".agents/agents");
-  const configAgentsDir = findUp(cwd, "pi/agents");
+  const configAgentsDir = findUp(cwd, "src/agents");
 
   const agentMap = new Map<string, AgentConfig>();
 
@@ -174,7 +174,7 @@ export function discoverAgentsScoped(cwd: string, scope: AgentScope): AgentDisco
       agentMap.set(agent.name, agent);
     }
 
-    // Config repo: pi/agents/
+    // Config repo: src/agents/
     if (configAgentsDir) {
       for (const agent of loadAgentsFromDir(configAgentsDir, "config")) {
         agentMap.set(agent.name, agent);

@@ -11,6 +11,7 @@ btw/
 ├── index.ts              # Entry point: registers /btw command
 ├── src/
 │   ├── btw-command.ts    # BtwCommand: orchestrates side query lifecycle
+│   ├── btw-context.ts    # Context extraction for side queries
 │   └── btw-overlay.ts    # BtwOverlay: TUI popup component
 ├── tests/
 │   ├── btw-command.test.ts

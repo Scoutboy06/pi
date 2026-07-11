@@ -9,7 +9,7 @@ Inspired by Claude Code's `/btw`.
 ```
 /btw What does this function return?
 /btw How many files are in the src directory?
-/btw What's the git status of the current branch?
+/btw Which files import this module?
 ```
 
 The response appears in a popup at the bottom of the terminal.

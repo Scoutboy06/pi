@@ -52,3 +52,7 @@ Combine all found `CODE.md` files into a single instruction block.
 If there are conflicting instructions, those that came from a file deeper in the structure take presedence.
 
 You are NOT allowed to modify `CODE.md` files unless EXPLICITLY instructed to do so.
+
+## Git
+
+- When making a commit, **NEVER** include yourself as a co-author.

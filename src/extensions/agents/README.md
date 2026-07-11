@@ -94,7 +94,5 @@ Agents are discovered from four locations (in priority order — higher override
 | ----------- | --------------------------------------- | ------- |
 | 1 (highest) | `.pi/agents/*.md` (cwd + ancestors)     | Project |
 | 2           | `.agents/agents/*.md` (cwd + ancestors) | Project |
-| 3           | `pi/agents/*.md` (config repo)          | Config  |
+| 3           | `src/agents/*.md` (config repo)         | Config  |
 | 4 (lowest)  | `~/.pi/agent/agents/*.md`               | Global  |
-
-## Installation

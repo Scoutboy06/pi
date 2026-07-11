@@ -68,6 +68,18 @@ describe("discoverAgents", () => {
     expect(reviewer!.source).toBe("project");
   });
 
+  it("discovers agents from the config repository's src/agents directory", () => {
+    const agentsDir = path.join(tmpDir, "src", "agents");
+    fs.mkdirSync(agentsDir, { recursive: true });
+    createAgentFile(agentsDir, "config-agent", "From config", "You are a config agent.");
+
+    const agents = discoverAgents(path.join(tmpDir, "nested", "project"));
+    const agent = agents.find((candidate) => candidate.name === "config-agent");
+
+    expect(agent).toBeDefined();
+    expect(agent!.source).toBe("config");
+  });
+
   it("parses optional fields (model, tools)", () => {
     const agentsDir = path.join(tmpDir, ".pi", "agents");
     fs.mkdirSync(agentsDir, { recursive: true });

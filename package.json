@@ -30,16 +30,16 @@
   },
   "pi": {
     "extensions": [
-      "./pi/extensions"
+      "./src/extensions"
     ],
     "skills": [
-      "./pi/skills"
+      "./src/skills"
     ],
     "prompts": [
-      "./pi/prompts"
+      "./src/prompts"
     ],
     "themes": [
-      "./pi/themes"
+      "./src/themes"
     ]
   }
 }

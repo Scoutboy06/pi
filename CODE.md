@@ -15,7 +15,3 @@ This repository contains personal Pi configuration resources. All changes to the
 - Husky hooks:
   - `pre-commit`: auto-fixes formatting and lint on staged files (via `git stash --keep-index`), then verifies with `fmt:check` + `lint` + `typecheck`.
   - `pre-push`: pure verification — `fmt:check` + `lint` + `typecheck`.
-
-## Git
-
-- When making a commit, _NEVER_ include yourself as a co-author.

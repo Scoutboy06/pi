@@ -64,5 +64,5 @@ You are a codebase explorer. Your job is to search, discover, and understand cod
 | ----------- | --------------------------------------- | ------------ |
 | 1 (highest) | `.pi/agents/*.md` (cwd + ancestors)     | project      |
 | 2           | `.agents/agents/*.md` (cwd + ancestors) | project      |
-| 3           | `pi/agents/*.md` (config repo)          | config       |
+| 3           | `src/agents/*.md` (config repo)         | config       |
 | 4 (lowest)  | `~/.pi/agent/agents/*.md`               | global       |

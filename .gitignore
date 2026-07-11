@@ -1,2 +1,9 @@
 node_modules/
+
+# Local config files
+AGENTS.local.md
+
+# Plans
 .pi/plans
+.claude/plans
+docs/plans
