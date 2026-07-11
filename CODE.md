@@ -6,8 +6,9 @@ This repository contains personal Pi configuration resources. All changes to the
 
 ## Workflow
 
-- When writing code, regularly lint and test your code for errors.
+- When writing code, regularly typecheck, lint, and test your code for errors.
 
+  - Typecheck: `bun typecheck`
   - Lint: `bun lint` (auto-fix: `bun lint:fix`)
   - Format: `bun fmt` (check: `bun fmt:check`)
 

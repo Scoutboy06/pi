@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    // Environment Settings
+    "module": "nodenext",
+    "types": ["bun"],
+
+    // Stricter Typechecking
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noUncheckedSideEffectImports": true,
+    "verbatimModuleSyntax": true,
+
+    // Performance
+    "skipLibCheck": true,
+
+    // Typecheck only — no emit
+    "noEmit": true,
+  },
+  "include": ["pi/**/*.ts"],
+}
