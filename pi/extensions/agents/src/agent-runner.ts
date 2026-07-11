@@ -22,8 +22,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
-import type { AgentConfig, AgentScope } from "./agent-loader";
-import { discoverAgentsScoped } from "./agent-loader";
+import type { AgentConfig, AgentScope } from "./agent-loader.js";
+import { discoverAgentsScoped } from "./agent-loader.js";
 
 // ── Constants ──────────────────────────────────────────────────
 
@@ -89,9 +89,13 @@ export function formatUsageStats(usage: UsageStats, model?: string): string {
 export function getFinalOutput(messages: Array<Record<string, unknown>>): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
+    if (!msg) continue;
     if (msg.role === "assistant") {
-      for (const part of (msg.content as Array<Record<string, unknown>>) || []) {
-        if (part.type === "text") return part.text as string;
+      const content = msg.content as Array<Record<string, unknown>>;
+      if (content) {
+        for (const part of content) {
+          if (part && part.type === "text") return part.text as string;
+        }
       }
     }
   }
@@ -214,17 +218,20 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
 ): Promise<TOut[]> {
   if (items.length === 0) return [];
   const limit = Math.max(1, Math.min(concurrency, items.length));
-  const results: TOut[] = Array.from({ length: items.length });
+  const nextResult: TOut[] = Array.from({ length: items.length });
   let nextIndex = 0;
   const workers = Array.from({ length: limit }).map(async () => {
     while (true) {
       const current = nextIndex++;
       if (current >= items.length) return;
-      results[current] = await fn(items[current], current);
+      const item = items[current];
+      if (item !== undefined) {
+        nextResult[current] = await fn(item, current);
+      }
     }
   });
   await Promise.all(workers);
-  return results;
+  return nextResult;
 }
 
 // ── Temp file helpers ──────────────────────────────────────────
@@ -315,9 +322,13 @@ export async function runSubagent(
     messages: [],
     stderr: "",
     usage: makeEmptyUsage(),
-    model: agent.model,
-    step,
   };
+  if (agent.model) {
+    currentResult.model = agent.model;
+  }
+  if (step !== undefined) {
+    currentResult.step = step;
+  }
 
   const emitUpdate = () => {
     if (onUpdate) {
@@ -360,30 +371,35 @@ export async function runSubagent(
         // Track message_end events for assistant and tool results
         if (event.type === "message_end" && event.message) {
           const msg = event.message as Record<string, unknown>;
-          currentResult.messages.push(msg);
+          if (msg) {
+            currentResult.messages.push(msg);
 
-          if (msg.role === "assistant") {
-            currentResult.usage.turns++;
-            const usage = msg.usage as Record<string, number> | undefined;
-            if (usage) {
-              currentResult.usage.input += usage.input || 0;
-              currentResult.usage.output += usage.output || 0;
-              currentResult.usage.cacheRead += usage.cacheRead || 0;
-              currentResult.usage.cacheWrite += usage.cacheWrite || 0;
-              const costTotal = (usage.cost as Record<string, number> | undefined)?.total ?? 0;
-              currentResult.usage.cost += costTotal;
-              currentResult.usage.contextTokens = usage.totalTokens || 0;
+            if (msg.role === "assistant") {
+              currentResult.usage.turns++;
+              const usage = msg.usage as Record<string, number> | undefined;
+              if (usage) {
+                currentResult.usage.input += usage.input || 0;
+                currentResult.usage.output += usage.output || 0;
+                currentResult.usage.cacheRead += usage.cacheRead || 0;
+                currentResult.usage.cacheWrite += usage.cacheWrite || 0;
+                const costTotal = (usage.cost as Record<string, number> | undefined)?.total ?? 0;
+                currentResult.usage.cost += costTotal;
+                currentResult.usage.contextTokens = usage.totalTokens || 0;
+              }
+              if (!currentResult.model && msg.model) currentResult.model = msg.model as string;
+              if (msg.stopReason) currentResult.stopReason = msg.stopReason as string;
+              if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage as string;
             }
-            if (!currentResult.model && msg.model) currentResult.model = msg.model as string;
-            if (msg.stopReason) currentResult.stopReason = msg.stopReason as string;
-            if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage as string;
+            emitUpdate();
           }
-          emitUpdate();
         }
 
         if (event.type === "tool_result_end" && event.message) {
-          currentResult.messages.push(event.message as Record<string, unknown>);
-          emitUpdate();
+          const toolMsg = event.message as Record<string, unknown>;
+          if (toolMsg) {
+            currentResult.messages.push(toolMsg);
+            emitUpdate();
+          }
         }
       };
 
@@ -459,23 +475,24 @@ export async function runChain(
   let previousOutput = "";
 
   for (let i = 0; i < chain.length; i++) {
-    const step = chain[i];
-    const taskWithContext = step.task.replace(/\{previous\}/g, previousOutput);
+    const chainStep = chain[i];
+    if (!chainStep) continue;
+    const taskWithContext = chainStep.task.replace(/\{previous\}/g, previousOutput);
 
     // Find agent
-    const agent = agents.find((a) => a.name === step.agent);
+    const agent = agents.find((a: AgentConfig) => a.name === chainStep.agent);
     if (!agent) {
       const errResult: SingleResult = {
-        agent: step.agent,
+        agent: chainStep.agent,
         agentSource: "unknown",
         task: taskWithContext,
         exitCode: 1,
         messages: [],
-        stderr: `Unknown agent: "${step.agent}"`,
+        stderr: `Unknown agent: "${chainStep.agent}"`,
         usage: makeEmptyUsage(),
         step: i + 1,
         stopReason: "error",
-        errorMessage: `Unknown agent: "${step.agent}"`,
+        errorMessage: `Unknown agent: "${chainStep.agent}"`,
       };
       results.push(errResult);
       return { results, finalOutput: errResult.errorMessage!, isError: true };
@@ -497,7 +514,7 @@ export async function runChain(
     const result = await runSubagent(
       agent,
       taskWithContext,
-      step.cwd ?? cwd,
+      chainStep.cwd ?? cwd,
       signal,
       chainUpdate,
       makeDetails,
@@ -509,16 +526,17 @@ export async function runChain(
       const errorMsg = getResultOutput(result);
       return {
         results,
-        finalOutput: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}`,
+        finalOutput: `Chain stopped at step ${i + 1} (${chainStep.agent}): ${errorMsg}`,
         isError: true,
       };
     }
     previousOutput = getFinalOutput(result.messages);
   }
 
+  const lastResult = results[results.length - 1];
   return {
     results,
-    finalOutput: getFinalOutput(results[results.length - 1].messages) || "(no output)",
+    finalOutput: (lastResult ? getFinalOutput(lastResult.messages) : "") || "(no output)",
     isError: false,
   };
 }
@@ -545,11 +563,12 @@ export async function runParallel(
 
   // Initialize placeholder results for streaming
   const allResults: SingleResult[] = Array.from({ length: tasks.length });
-  for (let i = 0; i < tasks.length; i++) {
+  for (const i in tasks) {
+    const task = tasks[i]!;
     allResults[i] = {
-      agent: tasks[i].agent,
+      agent: task.agent,
       agentSource: "unknown",
-      task: tasks[i].task,
+      task: task.task,
       exitCode: -1, // -1 = still running
       messages: [],
       stderr: "",
@@ -574,7 +593,7 @@ export async function runParallel(
   };
 
   const results = await mapWithConcurrencyLimit(tasks, MAX_CONCURRENCY, async (t, index) => {
-    const agent = agents.find((a) => a.name === t.agent);
+    const agent = agents.find((a: AgentConfig) => a.name === t.agent);
     if (!agent) {
       const errResult: SingleResult = {
         agent: t.agent,
@@ -587,7 +606,8 @@ export async function runParallel(
         stopReason: "error",
         errorMessage: `Unknown agent: "${t.agent}"`,
       };
-      allResults[index] = errResult;
+      const idx = index;
+      allResults[idx] = errResult;
       emitParallelUpdate();
       return errResult;
     }
@@ -599,14 +619,17 @@ export async function runParallel(
       signal,
       // Per-task update callback
       (partial) => {
-        if (partial.details.results[0]) {
-          allResults[index] = partial.details.results[0];
+        const idx = index;
+        const res = partial.details.results[0];
+        if (res) {
+          allResults[idx] = res;
           emitParallelUpdate();
         }
       },
       makeDetails,
     );
-    allResults[index] = result;
+    const idx2 = index;
+    allResults[idx2] = result;
     emitParallelUpdate();
     return result;
   });

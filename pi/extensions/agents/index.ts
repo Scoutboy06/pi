@@ -15,9 +15,10 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { discoverAgents, formatAgentList } from "./src/agent-loader";
-import { AgentRunner } from "./src/agent-runner";
-import { registerAgentTool } from "./src/agent-tool";
+import type { AgentConfig } from "./src/agent-loader.js";
+import { discoverAgents, formatAgentList } from "./src/agent-loader.js";
+import { AgentRunner } from "./src/agent-runner.js";
+import { registerAgentTool } from "./src/agent-tool.js";
 
 export default function (pi: ExtensionAPI) {
   const runner = new AgentRunner();
@@ -63,7 +64,7 @@ export default function (pi: ExtensionAPI) {
     const flagValue = pi.getFlag("agent");
     if (typeof flagValue === "string" && flagValue.trim()) {
       const cliAgentName = flagValue.trim();
-      const agent = agents.find((a) => a.name === cliAgentName);
+      const agent = agents.find((a: AgentConfig) => a.name === cliAgentName);
 
       if (agent) {
         await runner.apply(agent, pi, ctx);

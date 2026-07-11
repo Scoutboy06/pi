@@ -1,5 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { GitClient, RepoStatus } from "./git-client";
+import type { GitClient, RepoStatus } from "./git-client.js";
 
 /**
  * Summary after checking the pi config repo for updates.

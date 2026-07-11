@@ -42,6 +42,7 @@ export interface AgentDiscoveryResult {
 // ── Frontmatter parsing ───────────────────────────────────────
 
 interface AgentFrontmatter {
+  [key: string]: unknown;
   name?: string;
   description?: string;
   tools?: string;
@@ -67,15 +68,23 @@ function parseAgentFile(filePath: string, source: AgentConfig["source"]): AgentC
     .map((t: string) => t.trim())
     .filter(Boolean);
 
-  return {
+  const agent: AgentConfig = {
     name: frontmatter.name,
     description: frontmatter.description,
-    tools: tools && tools.length > 0 ? tools : undefined,
-    model: frontmatter.model?.trim() || undefined,
     systemPrompt: body.trim(),
     source,
     filePath,
   };
+
+  if (frontmatter.model?.trim()) {
+    agent.model = frontmatter.model.trim();
+  }
+
+  if (tools && tools.length > 0) {
+    agent.tools = tools;
+  }
+
+  return agent;
 }
 
 // ── Directory scanning ─────────────────────────────────────────

@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { PiExecGitClient } from "./src/git-client";
-import { GitChecker } from "./src/git-checker";
-import { UpdateCommand } from "./src/update-command";
+import { PiExecGitClient } from "./src/git-client.js";
+import { GitChecker } from "./src/git-checker.js";
+import { UpdateCommand } from "./src/update-command.js";
 
 /** How often to check for updates in the background (5 minutes). */
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;

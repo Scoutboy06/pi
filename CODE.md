@@ -9,7 +9,7 @@ This repository contains personal Pi configuration resources. All changes to the
 - When writing code, regularly typecheck, lint, and test your code for errors.
 
   - Typecheck: `bun typecheck`
-  - Lint: `bun lint` (auto-fix: `bun lint:fix`)
+  - Lint: `bun lint --format=agent` (auto-fix: `bun lint:fix --format=agent`)
   - Format: `bun fmt` (check: `bun fmt:check`)
 
 - Husky hooks:

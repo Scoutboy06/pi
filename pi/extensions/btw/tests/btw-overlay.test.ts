@@ -8,7 +8,7 @@ mock.module("@earendil-works/pi-tui", () => ({
   Key: { escape: "escape" },
 }));
 
-import { BtwOverlay, renderBtwPopup, type BtwTheme } from "../src/btw-overlay";
+import { BtwOverlay, renderBtwPopup, type BtwTheme } from "../src/btw-overlay.js";
 
 function mockTheme(): BtwTheme {
   return {
@@ -112,6 +112,6 @@ describe("BtwOverlay", () => {
     const wide = overlay.render(80);
 
     expect(narrow).not.toEqual(wide);
-    expect(wide[0].length).toBeGreaterThan(narrow[0].length);
+    expect(wide[0]!.length).toBeGreaterThan(narrow[0]!.length);
   });
 });

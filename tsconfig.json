@@ -6,7 +6,6 @@
 
     // Stricter Typechecking
     "strict": true,
-    "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
     "noUncheckedSideEffectImports": true,
     "verbatimModuleSyntax": true,
@@ -15,7 +14,7 @@
     "skipLibCheck": true,
 
     // Typecheck only — no emit
-    "noEmit": true,
+    "noEmit": true
   },
-  "include": ["pi/**/*.ts"],
+  "include": ["pi/**/*.ts"]
 }

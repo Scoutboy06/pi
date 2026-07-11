@@ -1,3 +1,4 @@
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   matchesKey,
   Key,
@@ -9,9 +10,7 @@ import {
 /**
  * Theme interface: a subset of Pi's full Theme that this overlay uses.
  */
-export interface BtwTheme {
-  fg: (color: string, text: string) => string;
-}
+export interface BtwTheme extends Pick<Theme, "fg"> {}
 
 /**
  * Pure function: render a bordered BTW popup as an array of lines.
@@ -87,8 +86,8 @@ export function renderBtwPopup(
  * Dismissible with Escape.
  */
 export class BtwOverlay implements Component {
-  private cachedWidth?: number;
-  private cachedLines?: string[];
+  private cachedWidth: number | null = null;
+  private cachedLines: string[] | null = null;
 
   constructor(
     private readonly question: string,
@@ -113,8 +112,8 @@ export class BtwOverlay implements Component {
   }
 
   invalidate(): void {
-    this.cachedWidth = undefined;
-    this.cachedLines = undefined;
+    this.cachedWidth = null;
+    this.cachedLines = null;
   }
 }
 

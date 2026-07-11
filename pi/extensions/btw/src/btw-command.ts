@@ -8,8 +8,8 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { buildContextPrompt } from "./btw-context";
-import { BtwOverlay } from "./btw-overlay";
+import { buildContextPrompt } from "./btw-context.js";
+import { BtwOverlay } from "./btw-overlay.js";
 
 /** Read-only tool names we permit for side queries. */
 const READ_ONLY_TOOLS = new Set(["read", "grep", "glob", "ls", "agent"]);
@@ -64,7 +64,13 @@ export class BtwCommand {
   ): Promise<string> {
     // ── 1. Collect conversation context ──────────────────────
     const entries = ctx.sessionManager.getEntries();
-    const contextPrompt = buildContextPrompt(entries);
+    const messages: Array<{ role: string; content: unknown }> = [];
+    for (const e of entries) {
+      if (e.type !== "message") continue;
+      const msg = e.message as { role: string; content: unknown };
+      messages.push(msg);
+    }
+    const contextPrompt = buildContextPrompt(messages);
 
     // ── 2. Build read-only tool list ─────────────────────────
     const readOnlyTools = (pi.getActiveTools() ?? []).filter((name) => READ_ONLY_TOOLS.has(name));

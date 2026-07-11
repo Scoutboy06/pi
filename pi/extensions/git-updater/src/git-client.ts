@@ -77,8 +77,14 @@ export class PiExecGitClient implements GitClient {
       "@{upstream}...HEAD",
     ]);
     if (code !== 0 || !stdout.trim()) return null;
-    const [behind, ahead] = stdout.trim().split("\t").map(Number);
+
+    const parts = stdout.trim().split("\t");
+    if (parts.length !== 2) return null;
+
+    const behind = Number(parts[0]);
+    const ahead = Number(parts[1]);
     if (isNaN(behind) || isNaN(ahead)) return null;
+
     return { behind, ahead };
   }
 

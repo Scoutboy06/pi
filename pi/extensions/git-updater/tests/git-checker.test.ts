@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
-import type { GitClient, RepoStatus } from "../src/git-client";
-import { GitChecker } from "../src/git-checker";
+import type { GitClient, RepoStatus } from "../src/git-client.js";
+import { GitChecker } from "../src/git-checker.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

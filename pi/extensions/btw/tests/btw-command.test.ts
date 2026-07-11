@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { buildContextPrompt, extractText } from "../src/btw-context";
+import { buildContextPrompt, extractText } from "../src/btw-context.js";
 
 describe("buildContextPrompt", () => {
   it("returns empty context message when no entries", () => {

@@ -10,11 +10,11 @@
  * Rendering uses Container/Markdown/Spacer for rich expanded views.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
-import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
-import { discoverAgentsScoped, type AgentConfig, type AgentScope } from "./agent-loader";
+import { Container, Markdown, Spacer, Text, type MarkdownTheme } from "@earendil-works/pi-tui";
+import { discoverAgentsScoped, type AgentConfig, type AgentScope } from "./agent-loader.js";
 import {
   runSubagent,
   runChain,
@@ -29,7 +29,7 @@ import {
   type OnUpdateCallback,
   type SingleResult,
   type SubagentDetails,
-} from "./agent-runner";
+} from "./agent-runner.js";
 
 // ── Constants ──────────────────────────────────────────────────
 
@@ -333,6 +333,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
           themeFg("muted", ` [${scope}]`);
         for (let i = 0; i < Math.min(chain.length, 3); i++) {
           const step = chain[i];
+          if (!step) continue;
           const cleanTask = step.task.replace(/\{previous\}/g, "").trim();
           const preview = cleanTask.length > 40 ? `${cleanTask.slice(0, 40)}...` : cleanTask;
           text +=
@@ -382,6 +383,23 @@ export function registerAgentTool(pi: ExtensionAPI): void {
     renderResult(result, { expanded }, theme, _context) {
       const details = result.details as SubagentDetails | undefined;
       const themeFg = theme.fg.bind(theme);
+      const styled = (color: string, text: string) => theme.fg(color as ThemeColor, text);
+      const markdownTheme: MarkdownTheme = {
+        heading: (text: string) => theme.fg("mdHeading", text),
+        link: (text: string) => theme.fg("mdLink", text),
+        linkUrl: (text: string) => theme.fg("mdLinkUrl", text),
+        code: (text: string) => theme.fg("mdCode", text),
+        codeBlock: (text: string) => theme.fg("mdCodeBlock", text),
+        codeBlockBorder: (text: string) => theme.fg("mdCodeBlockBorder", text),
+        quote: (text: string) => theme.fg("mdQuote", text),
+        quoteBorder: (text: string) => theme.fg("mdQuoteBorder", text),
+        hr: (text: string) => theme.fg("mdHr", text),
+        listBullet: (text: string) => theme.fg("mdListBullet", text),
+        bold: (text: string) => theme.bold(text),
+        italic: (text: string) => theme.italic(text),
+        strikethrough: (text: string) => theme.strikethrough(text),
+        underline: (text: string) => theme.underline(text),
+      };
 
       if (!details || details.results.length === 0) {
         const text = result.content[0];
@@ -392,6 +410,10 @@ export function registerAgentTool(pi: ExtensionAPI): void {
 
       if (details.mode === "single" && details.results.length === 1) {
         const r = details.results[0];
+        if (!r) {
+          const text = result.content[0];
+          return new Text(text?.type === "text" ? text.text : "(no output)", 0, 0);
+        }
         const isError = isFailedResult(r);
         const icon = isError ? themeFg("error", "✗") : themeFg("success", "✓");
         const displayItems = getDisplayItems(r.messages);
@@ -416,7 +438,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
               if (item.type === "toolCall")
                 container.addChild(
                   new Text(
-                    themeFg("muted", "→ ") + formatToolCall(item.name, item.args, themeFg),
+                    themeFg("muted", "→ ") + formatToolCall(item.name, item.args, styled),
                     0,
                     0,
                   ),
@@ -424,7 +446,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
             }
             if (finalOutput) {
               container.addChild(new Spacer(1));
-              container.addChild(new Markdown(finalOutput.trim(), 0, 0));
+              container.addChild(new Markdown(finalOutput.trim(), 0, 0, markdownTheme));
             }
           }
           const usageStr = formatUsageStats(r.usage, r.model);
@@ -441,7 +463,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
         if (isError && r.errorMessage) text += `\n${themeFg("error", `Error: ${r.errorMessage}`)}`;
         else if (displayItems.length === 0) text += `\n${themeFg("muted", "(no output)")}`;
         else {
-          text += `\n${renderDisplayItems(displayItems, themeFg, expanded, COLLAPSED_ITEM_COUNT)}`;
+          text += `\n${renderDisplayItems(displayItems, styled, expanded, COLLAPSED_ITEM_COUNT)}`;
           if (displayItems.length > COLLAPSED_ITEM_COUNT)
             text += `\n${themeFg("muted", "(Ctrl+O to expand)")}`;
         }
@@ -492,7 +514,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
               if (item.type === "toolCall") {
                 container.addChild(
                   new Text(
-                    themeFg("muted", "→ ") + formatToolCall(item.name, item.args, themeFg),
+                    themeFg("muted", "→ ") + formatToolCall(item.name, item.args, styled),
                     0,
                     0,
                   ),
@@ -503,7 +525,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
             // Show final output as markdown
             if (finalOutput) {
               container.addChild(new Spacer(1));
-              container.addChild(new Markdown(finalOutput.trim(), 0, 0));
+              container.addChild(new Markdown(finalOutput.trim(), 0, 0, markdownTheme));
             }
 
             const stepUsage = formatUsageStats(r.usage, r.model);
@@ -521,7 +543,15 @@ export function registerAgentTool(pi: ExtensionAPI): void {
               acc.turns += r.usage.turns;
               return acc;
             },
-            { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 },
+            {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              cost: 0,
+              turns: 0,
+              contextTokens: 0,
+            },
           );
           const usageStr = formatUsageStats(totalUsage);
           if (usageStr) {
@@ -543,7 +573,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
           const displayItems = getDisplayItems(r.messages);
           text += `\n\n${themeFg("muted", `─── Step ${r.step}: `)}${themeFg("accent", r.agent)} ${rIcon}`;
           if (displayItems.length === 0) text += `\n${themeFg("muted", "(no output)")}`;
-          else text += `\n${renderDisplayItems(displayItems, themeFg, expanded, 5)}`;
+          else text += `\n${renderDisplayItems(displayItems, styled, expanded, 5)}`;
         }
 
         const totalUsage = details.results.reduce(
@@ -556,7 +586,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
             acc.turns += r.usage.turns;
             return acc;
           },
-          { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 },
+          { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0, contextTokens: 0 },
         );
         const usageStr = formatUsageStats(totalUsage);
         if (usageStr) text += `\n\n${themeFg("dim", `Total: ${usageStr}`)}`;
@@ -605,7 +635,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
               if (item.type === "toolCall") {
                 container.addChild(
                   new Text(
-                    themeFg("muted", "→ ") + formatToolCall(item.name, item.args, themeFg),
+                    themeFg("muted", "→ ") + formatToolCall(item.name, item.args, styled),
                     0,
                     0,
                   ),
@@ -615,7 +645,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
 
             if (finalOutput) {
               container.addChild(new Spacer(1));
-              container.addChild(new Markdown(finalOutput.trim(), 0, 0));
+              container.addChild(new Markdown(finalOutput.trim(), 0, 0, markdownTheme));
             }
 
             const taskUsage = formatUsageStats(r.usage, r.model);
@@ -633,7 +663,15 @@ export function registerAgentTool(pi: ExtensionAPI): void {
               acc.turns += r.usage.turns;
               return acc;
             },
-            { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 },
+            {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              cost: 0,
+              turns: 0,
+              contextTokens: 0,
+            },
           );
           const usageStr = formatUsageStats(totalUsage);
           if (usageStr) {
@@ -657,7 +695,7 @@ export function registerAgentTool(pi: ExtensionAPI): void {
           text += `\n\n${themeFg("muted", "─── ")}${themeFg("accent", r.agent)} ${rIcon}`;
           if (displayItems.length === 0)
             text += `\n${themeFg("muted", r.exitCode === -1 ? "(running...)" : "(no output)")}`;
-          else text += `\n${renderDisplayItems(displayItems, themeFg, expanded, 5)}`;
+          else text += `\n${renderDisplayItems(displayItems, styled, expanded, 5)}`;
         }
         if (!isRunning) {
           const totalUsage = details.results.reduce(
@@ -670,7 +708,15 @@ export function registerAgentTool(pi: ExtensionAPI): void {
               acc.turns += r.usage.turns;
               return acc;
             },
-            { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 },
+            {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              cost: 0,
+              turns: 0,
+              contextTokens: 0,
+            },
           );
           const usageStr = formatUsageStats(totalUsage);
           if (usageStr) text += `\n\n${themeFg("dim", `Total: ${usageStr}`)}`;

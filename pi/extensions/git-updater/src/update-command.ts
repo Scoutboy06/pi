@@ -1,6 +1,6 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import type { GitClient } from "./git-client";
-import { GitChecker } from "./git-checker";
+import type { GitClient } from "./git-client.js";
+import { GitChecker } from "./git-checker.js";
 
 /**
  * Handles the /update slash command: fetches and pulls the pi config repo.

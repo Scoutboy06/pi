@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
-import type { GitClient } from "../src/git-client";
-import { UpdateCommand } from "../src/update-command";
+import type { GitClient } from "../src/git-client.js";
+import { UpdateCommand } from "../src/update-command.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

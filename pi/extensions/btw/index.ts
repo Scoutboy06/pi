@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { BtwCommand } from "./src/btw-command";
+import { BtwCommand } from "./src/btw-command.js";
 
 export default function (pi: ExtensionAPI) {
   const btwCommand = new BtwCommand();

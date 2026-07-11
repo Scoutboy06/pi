@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { AgentRunner } from "../src/agent-runner";
+import { AgentRunner } from "../src/agent-runner.js";
 
 // ── Tests ──────────────────────────────────────────────────────
 
