@@ -5,6 +5,7 @@
     "": {
       "name": "elias-pi-config",
       "dependencies": {
+        "@firstpick/pi-extension-git-footer-status": "^0.3.8",
         "@narumitw/pi-codex-usage": "0.13.1",
       },
       "devDependencies": {
@@ -83,6 +84,10 @@
     "@earendil-works/pi-coding-agent": ["@earendil-works/pi-coding-agent@0.80.5", "", { "dependencies": { "@earendil-works/pi-agent-core": "0.80.5", "@earendil-works/pi-ai": "0.80.5", "@earendil-works/pi-tui": "0.80.5", "@silvia-odwyer/photon-node": "0.3.4", "chalk": "5.6.2", "cross-spawn": "7.0.6", "diff": "8.0.4", "glob": "13.0.6", "highlight.js": "10.7.3", "hosted-git-info": "9.0.3", "ignore": "7.0.5", "jiti": "2.7.0", "minimatch": "10.2.5", "proper-lockfile": "4.1.2", "semver": "7.8.0", "typebox": "1.1.38", "undici": "8.5.0", "yaml": "2.9.0" }, "optionalDependencies": { "@mariozechner/clipboard": "0.3.9" }, "bin": { "pi": "dist/cli.js" } }, "sha512-GPYFuHw1BN+3m5Gzw1HGH41WdFDzbplLauS0zYSf1ZOkgKFd6wtEAcjchB/vmz9YtTGbQOwECbsVj6GxZxungA=="],
 
     "@earendil-works/pi-tui": ["@earendil-works/pi-tui@0.80.5", "", { "dependencies": { "get-east-asian-width": "1.6.0", "marked": "18.0.5" } }, "sha512-raxEUD2CvCDNJuOWEAI+xD7vmxCrGH0NYb31+GQDdL1q9WXn5+uNLgP1vkJfOsTvf9k5zU5sNFA06oBIcWSYtQ=="],
+
+    "@firstpick/pi-extension-git-footer-status": ["@firstpick/pi-extension-git-footer-status@0.3.8", "", { "dependencies": { "@firstpick/pi-utils": "^0.2.3" }, "peerDependencies": { "@earendil-works/pi-ai": "*", "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-tui": "*" } }, "sha512-Es4iAoz2x9U8XJQDi88psAc58AQ+Gp1nI5aWISxdZbhwz3YsAWReC6ALu1wcOvVcu/xsivA4cKG0oinhHESZeg=="],
+
+    "@firstpick/pi-utils": ["@firstpick/pi-utils@0.2.3", "", { "peerDependencies": { "@earendil-works/pi-coding-agent": "*" } }, "sha512-PcLNMykPpg1m104vYOMg+m5Aswst/ZoI00RpcHUg2Oei2VgZYVowsjkBzOuveme9alOdPa7C+yDIelWDQvhK3Q=="],
 
     "@google/genai": ["@google/genai@1.52.0", "", { "dependencies": { "google-auth-library": "10.9.0", "p-retry": "4.6.2", "protobufjs": "7.6.5", "ws": "8.21.0" } }, "sha512-gwSvbpiN/17O9TbsqSsE/OzZcpv5Fo4RQjdngGgogtuB9RsyJ8ZHhX5KjHj1bp5N9snN2eK8LDGXSaWW2hof8Q=="],
 

@@ -15,6 +15,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@firstpick/pi-extension-git-footer-status": "^0.3.8",
     "@narumitw/pi-codex-usage": "0.13.1"
   },
   "devDependencies": {
