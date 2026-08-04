@@ -68,6 +68,37 @@ describe("discoverAgents", () => {
     expect(reviewer!.source).toBe("project");
   });
 
+  it("discovers Claude-compatible project agents", () => {
+    const projectDir = path.join(tmpDir, "claude-project");
+    const agentsDir = path.join(projectDir, ".claude", "agents");
+    fs.mkdirSync(agentsDir, { recursive: true });
+    createAgentFile(agentsDir, "claude-worker", "Claude project agent", "Compatible body", {
+      model: "sonnet",
+    });
+
+    const agents = discoverAgents(path.join(projectDir, "nested"));
+    const agent = agents.find((candidate) => candidate.name === "claude-worker");
+
+    expect(agent).toBeDefined();
+    expect(agent!.source).toBe("project");
+    expect(agent!.model).toBe("sonnet");
+  });
+
+  it("prefers native Pi project agents over Claude-compatible agents", () => {
+    const projectDir = path.join(tmpDir, "priority-project");
+    const claudeDir = path.join(projectDir, ".claude", "agents");
+    const piDir = path.join(projectDir, ".pi", "agents");
+    fs.mkdirSync(claudeDir, { recursive: true });
+    fs.mkdirSync(piDir, { recursive: true });
+    createAgentFile(claudeDir, "shared", "From Claude", "claude body");
+    createAgentFile(piDir, "shared", "From Pi", "pi body");
+
+    const agent = discoverAgents(projectDir).find((candidate) => candidate.name === "shared");
+
+    expect(agent?.description).toBe("From Pi");
+    expect(agent?.systemPrompt).toBe("pi body");
+  });
+
   it("discovers agents from the config repository's src/agents directory", () => {
     const agentsDir = path.join(tmpDir, "src", "agents");
     fs.mkdirSync(agentsDir, { recursive: true });

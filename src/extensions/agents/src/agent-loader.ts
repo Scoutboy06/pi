@@ -2,17 +2,18 @@
  * Agent discovery and configuration.
  *
  * Scans for agent definitions (*.md files with YAML frontmatter) from:
- *   1. .pi/agents/*.md        (cwd + ancestors) — highest priority
- *   2. .agents/agents/*.md    (cwd + ancestors)
- *   3. src/agents/*.md        (config repo, found by walking up from cwd)
- *   4. ~/.pi/agent/agents/*.md (global) — lowest priority
+ *   1. .pi/agents/*.md         (cwd + ancestors) — highest priority
+ *   2. .agents/agents/*.md     (cwd + ancestors)
+ *   3. .claude/agents/*.md     (cwd + ancestors, compatibility)
+ *   4. src/agents/*.md         (config repo, found by walking up from cwd)
+ *   5. ~/.pi/agent/agents/*.md (global) — lowest priority
  *
  * Project agents override global agents with the same name.
  * Within the same scope, first discovered wins.
  *
  * Scope control via AgentScope:
  *   - "user":    only global (~/.pi/agent/agents/) and config repo (src/agents/)
- *   - "project": only project-local (.pi/agents/, .agents/agents/)
+ *   - "project": only project-local (.pi/agents/, .agents/agents/, .claude/agents/)
  *   - "both":    all locations, project overrides user (default for session persona)
  */
 
@@ -131,7 +132,7 @@ function loadAgentsFromDir(dir: string, source: AgentConfig["source"]): AgentCon
  * Walk up from `startDir` looking for a subdirectory `relativePath`.
  * Returns the first found absolute path, or null.
  */
-function findUp(startDir: string, relativePath: string): string | null {
+export function findUp(startDir: string, relativePath: string): string | null {
   let current = path.resolve(startDir);
   while (true) {
     const candidate = path.join(current, relativePath);
@@ -163,6 +164,7 @@ export function discoverAgentsScoped(cwd: string, scope: AgentScope): AgentDisco
   const globalDir = path.join(getAgentDir(), "agents");
   const projectAgentsDir = findNearestProjectAgentsDir(cwd);
   const dotAgentsDir = findUp(cwd, ".agents/agents");
+  const claudeAgentsDir = findUp(cwd, ".claude/agents");
   const configAgentsDir = findUp(cwd, "src/agents");
 
   const agentMap = new Map<string, AgentConfig>();
@@ -184,7 +186,14 @@ export function discoverAgentsScoped(cwd: string, scope: AgentScope): AgentDisco
 
   // Project-scoped sources
   if (scope === "project" || scope === "both") {
-    // .agents/agents/ (lower priority among project sources)
+    // .claude/agents/ (compatibility source; native Pi locations override it)
+    if (claudeAgentsDir) {
+      for (const agent of loadAgentsFromDir(claudeAgentsDir, "project")) {
+        agentMap.set(agent.name, agent);
+      }
+    }
+
+    // .agents/agents/ (lower priority among native project sources)
     if (dotAgentsDir) {
       for (const agent of loadAgentsFromDir(dotAgentsDir, "project")) {
         agentMap.set(agent.name, agent);
@@ -199,7 +208,10 @@ export function discoverAgentsScoped(cwd: string, scope: AgentScope): AgentDisco
     }
   }
 
-  return { agents: Array.from(agentMap.values()), projectAgentsDir };
+  return {
+    agents: Array.from(agentMap.values()),
+    projectAgentsDir: projectAgentsDir ?? dotAgentsDir ?? claudeAgentsDir,
+  };
 }
 
 /**

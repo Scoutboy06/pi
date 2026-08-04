@@ -10,13 +10,14 @@
  * Agent definitions are markdown files with YAML frontmatter, discovered from:
  *   1. .pi/agents/*.md         (cwd + ancestors)
  *   2. .agents/agents/*.md     (cwd + ancestors)
- *   3. pi/agents/*.md          (config repo)
- *   4. ~/.pi/agent/agents/*.md (global)
+ *   3. .claude/agents/*.md     (cwd + ancestors, compatibility)
+ *   4. pi/agents/*.md          (config repo)
+ *   5. ~/.pi/agent/agents/*.md (global)
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AgentConfig } from "./src/agent-loader.js";
-import { discoverAgents, formatAgentList } from "./src/agent-loader.js";
+import { discoverAgents, findUp, formatAgentList } from "./src/agent-loader.js";
 import { AgentRunner } from "./src/agent-runner.js";
 import { registerAgentTool } from "./src/agent-tool.js";
 
@@ -76,6 +77,15 @@ export default function (pi: ExtensionAPI) {
         );
       }
     }
+  });
+
+  // ── Claude skill compatibility ──────────────────────────
+
+  pi.on("resources_discover", async (event, ctx) => {
+    if (!ctx.isProjectTrusted()) return;
+    const claudeSkillsDir = findUp(event.cwd, ".claude/skills");
+    if (!claudeSkillsDir) return;
+    return { skillPaths: [claudeSkillsDir] };
   });
 
   // ── before_agent_start: inject agent system prompt ───────

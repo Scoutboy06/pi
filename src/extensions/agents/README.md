@@ -42,7 +42,7 @@ The model can call the `agent` tool to delegate focused tasks to specialized per
 **Scope control:**
 
 - `agentScope: "user"` — only global agents (`~/.pi/agent/agents/`, `pi/agents/`)
-- `agentScope: "project"` — only project-local agents (`.pi/agents/`, `.agents/agents/`)
+- `agentScope: "project"` — only project-local agents (`.pi/agents/`, `.agents/agents/`, `.claude/agents/`)
 - `agentScope: "both"` — all locations, project overrides user (default for session persona, not for tool)
 - Default tool scope is `"user"` for safety
 
@@ -88,11 +88,14 @@ When given a task:
 
 ## Discovery Locations
 
-Agents are discovered from four locations (in priority order — higher overrides lower):
+Agents are discovered from five locations (in priority order — higher overrides lower):
 
 | Priority    | Location                                | Scope   |
 | ----------- | --------------------------------------- | ------- |
 | 1 (highest) | `.pi/agents/*.md` (cwd + ancestors)     | Project |
 | 2           | `.agents/agents/*.md` (cwd + ancestors) | Project |
-| 3           | `src/agents/*.md` (config repo)         | Config  |
-| 4 (lowest)  | `~/.pi/agent/agents/*.md`               | Global  |
+| 3           | `.claude/agents/*.md` (cwd + ancestors) | Project |
+| 4           | `src/agents/*.md` (config repo)         | Config  |
+| 5 (lowest)  | `~/.pi/agent/agents/*.md`               | Global  |
+
+For trusted projects, `.claude/skills/` is also contributed to Pi through `resources_discover`. Native Pi agent definitions override Claude-compatible definitions with the same name.
