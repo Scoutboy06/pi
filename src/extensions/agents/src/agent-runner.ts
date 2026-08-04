@@ -60,6 +60,7 @@ export interface SubagentDetails {
   agentScope: AgentScope;
   projectAgentsDir: string | null;
   results: SingleResult[];
+  backgroundRunId?: string;
 }
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -700,7 +701,8 @@ export class AgentRunner {
 
     // Restrict tools if specified
     if (agent.tools && agent.tools.length > 0) {
-      pi.setActiveTools(agent.tools);
+      const managedStatusTool = process.env.PI_AGENT_RUN_ID ? ["agent_report_status"] : [];
+      pi.setActiveTools([...new Set([...agent.tools, ...managedStatusTool])]);
     } else {
       // If no tools specified, use all default tools
       if (this.originalTools) {

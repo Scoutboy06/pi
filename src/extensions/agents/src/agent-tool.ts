@@ -15,6 +15,7 @@ import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Container, Markdown, Spacer, Text, type MarkdownTheme } from "@earendil-works/pi-tui";
 import { discoverAgentsScoped, type AgentConfig, type AgentScope } from "./agent-loader.js";
+import type { AgentRunManager } from "./agent-run-manager.js";
 import {
   runSubagent,
   runChain,
@@ -77,6 +78,15 @@ const AgentToolParams = Type.Object({
   cwd: Type.Optional(
     Type.String({ description: "Working directory for the agent process (single mode)" }),
   ),
+  background: Type.Optional(
+    Type.Boolean({
+      description: "Run single mode as a durable background RPC session. Default: false.",
+      default: false,
+    }),
+  ),
+  tags: Type.Optional(
+    Type.Array(Type.String(), { description: "Workflow-agnostic labels for a background run" }),
+  ),
 });
 
 // ── Rendering helpers ──────────────────────────────────────────
@@ -104,15 +114,16 @@ function renderDisplayItems(
 
 // ── Tool registration ──────────────────────────────────────────
 
-export function registerAgentTool(pi: ExtensionAPI): void {
+export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager): void {
   pi.registerTool({
     name: "agent",
     label: "Agent",
     description:
       "Delegate tasks to specialized agent personas with isolated context. " +
       "Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder). " +
+      "Single mode can run as a durable background RPC session. " +
       'Default scope is "user" (global agents). Use agentScope: "both" to include project agents. ' +
-      "Agents are defined in pi/agents/, .pi/agents/, .agents/agents/, or ~/.pi/agent/agents/.",
+      "Agents are defined in pi/agents/, .pi/agents/, .agents/agents/, .claude/agents/, or ~/.pi/agent/agents/.",
     promptSnippet: "Delegate a task to a specialized agent persona (single, parallel, or chain)",
     promptGuidelines: [
       "Use the agent tool to delegate focused tasks to specialized personas. " +
@@ -143,6 +154,16 @@ export function registerAgentTool(pi: ExtensionAPI): void {
         });
 
       // ── Validation ──────────────────────────────────────────
+
+      if (params.background && !hasSingle) {
+        return {
+          content: [
+            { type: "text", text: "Background execution is supported only for single mode." },
+          ],
+          details: makeDetails("single")([]),
+          isError: true,
+        };
+      }
 
       if (modeCount !== 1) {
         const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
@@ -279,9 +300,31 @@ export function registerAgentTool(pi: ExtensionAPI): void {
           };
         }
 
+        if (params.background) {
+          const run = await runManager.start(
+            agent,
+            params.task,
+            params.cwd ?? ctx.cwd,
+            params.tags ?? [],
+          );
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Started background agent ${agent.name}: ${run.id} [${run.status}]`,
+              },
+            ],
+            details: {
+              ...makeDetails("single")([]),
+              backgroundRunId: run.id,
+            },
+            isError: run.status === "failed",
+          };
+        }
+
         const result = await runSubagent(
           agent,
-          params.task as string,
+          params.task,
           params.cwd ?? ctx.cwd,
           signal,
           onUpdate as OnUpdateCallback | undefined,
@@ -373,7 +416,8 @@ export function registerAgentTool(pi: ExtensionAPI): void {
       let text =
         themeFg("toolTitle", theme.bold("agent ")) +
         themeFg("accent", agentName) +
-        themeFg("muted", ` [${scope}]`);
+        themeFg("muted", ` [${scope}]`) +
+        (args.background ? themeFg("warning", " background") : "");
       text += `\n  ${themeFg("dim", preview)}`;
       return new Text(text, 0, 0);
     },

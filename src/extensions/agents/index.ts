@@ -19,10 +19,15 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AgentConfig } from "./src/agent-loader.js";
 import { discoverAgents, findUp, formatAgentList } from "./src/agent-loader.js";
 import { AgentRunner } from "./src/agent-runner.js";
+import { AgentRunManager } from "./src/agent-run-manager.js";
+import { AgentRunRegistry } from "./src/agent-run-registry.js";
+import { registerAgentRunTools } from "./src/agent-run-tool.js";
 import { registerAgentTool } from "./src/agent-tool.js";
 
 export default function (pi: ExtensionAPI) {
   const runner = new AgentRunner();
+  const runRegistry = new AgentRunRegistry();
+  const runManager = new AgentRunManager(runRegistry, undefined, pi.events);
 
   // ── CLI flag: --agent <name> ─────────────────────────────
 
@@ -34,6 +39,7 @@ export default function (pi: ExtensionAPI) {
   // ── Session start: register commands + apply CLI agent ───
 
   pi.on("session_start", async (_event, ctx) => {
+    runManager.watch();
     const agents = discoverAgents(ctx.cwd);
 
     // Register /agent:default command
@@ -88,6 +94,10 @@ export default function (pi: ExtensionAPI) {
     return { skillPaths: [claudeSkillsDir] };
   });
 
+  pi.on("session_shutdown", async () => {
+    runManager.close();
+  });
+
   // ── before_agent_start: inject agent system prompt ───────
 
   pi.on("before_agent_start", async (_event, _ctx) => {
@@ -103,5 +113,6 @@ export default function (pi: ExtensionAPI) {
 
   // ── Tool: agent(name, task) for LLM delegation ───────────
 
-  registerAgentTool(pi);
+  registerAgentTool(pi, runManager);
+  registerAgentRunTools(pi, runManager, runRegistry);
 }

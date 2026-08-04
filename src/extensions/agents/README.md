@@ -8,6 +8,8 @@ Persona-based agent delegation for pi. Define specialized agents as markdown fil
 | ---------------- | ----------------------------------------------------------------------------------- |
 | **Entry Points** | `/agent:<name>`, `--agent <name>`, `agent()` tool — all share the same core         |
 | **Agent Runner** | Configures persona (prompt, tools, model) and executes in-session or as a sub-agent |
+| **Run Manager**  | Starts and controls detached persistent RPC workers                                 |
+| **Run Registry** | Persists stable run IDs, hierarchy, lifecycle, activity, and session metadata       |
 | **Agent Loader** | Discovers and parses agent `*.md` files from all configured locations               |
 
 ## Usage
@@ -35,7 +37,7 @@ The model can call the `agent` tool to delegate focused tasks to specialized per
 
 | Mode     | Parameters                           | Description                                            |
 | -------- | ------------------------------------ | ------------------------------------------------------ |
-| Single   | `{ agent, task }`                    | One agent, one task                                    |
+| Single   | `{ agent, task, background? }`       | One agent, optionally a durable background RPC session |
 | Parallel | `{ tasks: [{ agent, task, cwd? }] }` | Multiple agents run concurrently (max 8, 4 concurrent) |
 | Chain    | `{ chain: [{ agent, task, cwd? }] }` | Sequential execution with `{previous}` placeholder     |
 
@@ -53,6 +55,20 @@ The model can call the `agent` tool to delegate focused tasks to specialized per
 - **Collapsed view:** Status icon, agent name, last 10 tool calls/text items, usage stats (tokens, cost, turns, context)
 - **Expanded view (Ctrl+O):** Full task text, all tool calls with formatted arguments (bash/read/write/edit/ls/find/grep), final output rendered as Markdown, per-task usage stats, aggregate totals
 - **Streaming:** Live progress updates ("running...", "2/3 done, 1 running")
+
+### Durable background runs
+
+Set `background: true` in single mode to return immediately with a stable run ID. The detached worker keeps a persistent Pi RPC session alive after the parent Pi session exits.
+
+Use the `agent_run` tool to:
+
+- `list` or `get` run state
+- send a new `message` when idle
+- `steer` a working agent or queue a `follow_up`
+- `abort` the current turn without ending the session
+- `stop` the worker
+
+Managed agents can call `agent_report_status` to explicitly report `working`, `paused`, or `blocked` with a detail. Lifecycle updates are emitted on the shared `agents:run-updated` event-bus channel. Records and persistent sessions live under `~/.pi/agent/agent-runs/` by default.
 
 ## Agent Definition Format
 
