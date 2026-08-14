@@ -1,7 +1,8 @@
 ---
 name: explorer
 description: Fast, read-only agent for searching and exploring codebases. Use proactively for file discovery, code search, and codebase exploration.
-model: deepseek/deepseek-v4-flash
+model: openai-codex/gpt-5.6-luna
+thinking: low
 tools: read, grep, glob, ls
 ---
 

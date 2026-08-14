@@ -5,20 +5,22 @@
  *   1. .pi/agents/*.md         (cwd + ancestors) — highest priority
  *   2. .agents/agents/*.md     (cwd + ancestors)
  *   3. .claude/agents/*.md     (cwd + ancestors, compatibility)
- *   4. src/agents/*.md         (config repo, found by walking up from cwd)
+ *   4. src/agents/*.md         (bundled with this config package)
  *   5. ~/.pi/agent/agents/*.md (global) — lowest priority
  *
  * Project agents override global agents with the same name.
  * Within the same scope, first discovered wins.
  *
  * Scope control via AgentScope:
- *   - "user":    only global (~/.pi/agent/agents/) and config repo (src/agents/)
+ *   - "user":    only global (~/.pi/agent/agents/) and bundled (src/agents/) agents
  *   - "project": only project-local (.pi/agents/, .agents/agents/, .claude/agents/)
  *   - "both":    all locations, project overrides user (default for session persona)
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -30,6 +32,7 @@ export interface AgentConfig {
   description: string;
   tools?: string[];
   model?: string;
+  thinking?: ThinkingLevel;
   systemPrompt: string;
   source: "project" | "config" | "global";
   filePath: string;
@@ -48,6 +51,19 @@ interface AgentFrontmatter {
   description?: string;
   tools?: string;
   model?: string;
+  thinking?: string;
+}
+
+function isThinkingLevel(value: unknown): value is ThinkingLevel {
+  return (
+    value === "off" ||
+    value === "minimal" ||
+    value === "low" ||
+    value === "medium" ||
+    value === "high" ||
+    value === "xhigh" ||
+    value === "max"
+  );
 }
 
 function parseAgentFile(filePath: string, source: AgentConfig["source"]): AgentConfig | null {
@@ -83,6 +99,10 @@ function parseAgentFile(filePath: string, source: AgentConfig["source"]): AgentC
 
   if (tools && tools.length > 0) {
     agent.tools = tools;
+  }
+
+  if (isThinkingLevel(frontmatter.thinking)) {
+    agent.thinking = frontmatter.thinking;
   }
 
   return agent;
@@ -152,6 +172,11 @@ function findNearestProjectAgentsDir(cwd: string): string | null {
   return findUp(cwd, `${CONFIG_DIR_NAME}/agents`);
 }
 
+/** Resolve agent definitions bundled with this config package. */
+function getBundledAgentsDir(): string {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../agents");
+}
+
 // ── Scoped discovery ───────────────────────────────────────────
 
 /**
@@ -165,7 +190,7 @@ export function discoverAgentsScoped(cwd: string, scope: AgentScope): AgentDisco
   const projectAgentsDir = findNearestProjectAgentsDir(cwd);
   const dotAgentsDir = findUp(cwd, ".agents/agents");
   const claudeAgentsDir = findUp(cwd, ".claude/agents");
-  const configAgentsDir = findUp(cwd, "src/agents");
+  const configAgentsDir = getBundledAgentsDir();
 
   const agentMap = new Map<string, AgentConfig>();
 
@@ -176,11 +201,9 @@ export function discoverAgentsScoped(cwd: string, scope: AgentScope): AgentDisco
       agentMap.set(agent.name, agent);
     }
 
-    // Config repo: src/agents/
-    if (configAgentsDir) {
-      for (const agent of loadAgentsFromDir(configAgentsDir, "config")) {
-        agentMap.set(agent.name, agent);
-      }
+    // Agent definitions bundled with this config package: src/agents/
+    for (const agent of loadAgentsFromDir(configAgentsDir, "config")) {
+      agentMap.set(agent.name, agent);
     }
   }
 

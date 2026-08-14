@@ -114,6 +114,15 @@ function renderDisplayItems(
 
 // ── Tool registration ──────────────────────────────────────────
 
+export function selectRequestedProjectAgents(
+  requestedAgentNames: Iterable<string>,
+  agents: AgentConfig[],
+): AgentConfig[] {
+  return Array.from(requestedAgentNames)
+    .map((name) => agents.find((agent) => agent.name === name))
+    .filter((agent): agent is AgentConfig => agent?.source === "project");
+}
+
 export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager): void {
   pi.registerTool({
     name: "agent",
@@ -122,8 +131,8 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
       "Delegate tasks to specialized agent personas with isolated context. " +
       "Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder). " +
       "Single mode can run as a durable background RPC session. " +
-      'Default scope is "user" (global agents). Use agentScope: "both" to include project agents. ' +
-      "Agents are defined in pi/agents/, .pi/agents/, .agents/agents/, .claude/agents/, or ~/.pi/agent/agents/.",
+      'Default scope is "user" (bundled and global agents). Use agentScope: "both" to include project agents. ' +
+      "Agents are defined in bundled src/agents/, .pi/agents/, .agents/agents/, .claude/agents/, or ~/.pi/agent/agents/.",
     promptSnippet: "Delegate a task to a specialized agent persona (single, parallel, or chain)",
     promptGuidelines: [
       "Use the agent tool to delegate focused tasks to specialized personas. " +
@@ -190,9 +199,7 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
         if (params.tasks) for (const t of params.tasks) requestedAgentNames.add(t.agent);
         if (params.agent) requestedAgentNames.add(params.agent);
 
-        const projectAgentsRequested = Array.from(requestedAgentNames)
-          .map((name) => agents.find((a) => a.name === name))
-          .filter((a): a is AgentConfig => a?.source === "project" || a?.source === "config");
+        const projectAgentsRequested = selectRequestedProjectAgents(requestedAgentNames, agents);
 
         if (projectAgentsRequested.length > 0) {
           const names = projectAgentsRequested.map((a) => a.name).join(", ");

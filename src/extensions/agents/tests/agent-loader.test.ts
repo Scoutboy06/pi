@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { discoverAgents, formatAgentList } from "../src/agent-loader.js";
+import { discoverAgents, discoverAgentsScoped, formatAgentList } from "../src/agent-loader.js";
 
 // ── Test helpers ───────────────────────────────────────────────
 
@@ -21,10 +21,11 @@ function createAgentFile(
   name: string,
   description: string,
   systemPrompt: string,
-  extras: { model?: string; tools?: string } = {},
+  extras: { model?: string; thinking?: string; tools?: string } = {},
 ): string {
   const frontmatter = [`name: ${name}`, `description: ${description}`];
   if (extras.model) frontmatter.push(`model: ${extras.model}`);
+  if (extras.thinking) frontmatter.push(`thinking: ${extras.thinking}`);
   if (extras.tools) frontmatter.push(`tools: ${extras.tools}`);
 
   const content = `---\n${frontmatter.join("\n")}\n---\n\n${systemPrompt}\n`;
@@ -99,16 +100,33 @@ describe("discoverAgents", () => {
     expect(agent?.systemPrompt).toBe("pi body");
   });
 
-  it("discovers agents from the config repository's src/agents directory", () => {
-    const agentsDir = path.join(tmpDir, "src", "agents");
+  it("discovers bundled agents with user scope from an unrelated cwd", () => {
+    const unrelatedCwd = path.join(tmpDir, "unrelated", "nested", "project");
+    fs.mkdirSync(unrelatedCwd, { recursive: true });
+
+    const agents = discoverAgentsScoped(unrelatedCwd, "user").agents;
+    const explorer = agents.find((candidate) => candidate.name === "explorer");
+
+    expect(explorer).toBeDefined();
+    expect(explorer!.source).toBe("config");
+    expect(explorer!.model).toBe("openai-codex/gpt-5.6-luna");
+    expect(explorer!.thinking).toBe("low");
+    expect(explorer!.filePath).toEndWith(path.join("src", "agents", "explorer.md"));
+  });
+
+  it("allows project agents to override bundled agents", () => {
+    const projectDir = path.join(tmpDir, "bundled-override-project");
+    const agentsDir = path.join(projectDir, ".pi", "agents");
     fs.mkdirSync(agentsDir, { recursive: true });
-    createAgentFile(agentsDir, "config-agent", "From config", "You are a config agent.");
+    createAgentFile(agentsDir, "explorer", "Project explorer", "project explorer body");
 
-    const agents = discoverAgents(path.join(tmpDir, "nested", "project"));
-    const agent = agents.find((candidate) => candidate.name === "config-agent");
+    const explorer = discoverAgentsScoped(projectDir, "both").agents.find(
+      (candidate) => candidate.name === "explorer",
+    );
 
-    expect(agent).toBeDefined();
-    expect(agent!.source).toBe("config");
+    expect(explorer?.source).toBe("project");
+    expect(explorer?.description).toBe("Project explorer");
+    expect(explorer?.systemPrompt).toBe("project explorer body");
   });
 
   it("parses optional fields (model, tools)", () => {
@@ -117,6 +135,7 @@ describe("discoverAgents", () => {
 
     createAgentFile(agentsDir, "scout", "Fast scout", "You are a scout.", {
       model: "claude-haiku-4-5",
+      thinking: "high",
       tools: "read, grep, find, ls",
     });
 
@@ -125,6 +144,7 @@ describe("discoverAgents", () => {
 
     expect(scout).toBeDefined();
     expect(scout!.model).toBe("claude-haiku-4-5");
+    expect(scout!.thinking).toBe("high");
     expect(scout!.tools).toEqual(["read", "grep", "find", "ls"]);
   });
 

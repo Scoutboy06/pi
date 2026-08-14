@@ -43,7 +43,7 @@ The model can call the `agent` tool to delegate focused tasks to specialized per
 
 **Scope control:**
 
-- `agentScope: "user"` — only global agents (`~/.pi/agent/agents/`, `pi/agents/`)
+- `agentScope: "user"` — bundled agents (`src/agents/`) and global agents (`~/.pi/agent/agents/`)
 - `agentScope: "project"` — only project-local agents (`.pi/agents/`, `.agents/agents/`, `.claude/agents/`)
 - `agentScope: "both"` — all locations, project overrides user (default for session persona, not for tool)
 - Default tool scope is `"user"` for safety
@@ -78,7 +78,8 @@ Create `.md` files with YAML frontmatter:
 ---
 name: explorer
 description: Fast, read-only agent for searching and exploring codebases
-model: claude-haiku-4-5
+model: openai-codex/gpt-5.6-luna
+thinking: low
 tools: read, grep, find, ls
 ---
 
@@ -95,12 +96,13 @@ When given a task:
 
 ### Fields
 
-| Field         | Required | Description                                                                               |
-| ------------- | -------- | ----------------------------------------------------------------------------------------- |
-| `name`        | Yes      | Unique identifier for the agent                                                           |
-| `description` | Yes      | When to use this agent (shown to LLM)                                                     |
-| `model`       | No       | Model to use (e.g., `claude-haiku-4-5`, `deepseek-v4-flash`). Falls back to current model |
-| `tools`       | No       | Comma-separated tool list. Falls back to all default tools                                |
+| Field         | Required | Description                                                                   |
+| ------------- | -------- | ----------------------------------------------------------------------------- |
+| `name`        | Yes      | Unique identifier for the agent                                               |
+| `description` | Yes      | When to use this agent (shown to LLM)                                         |
+| `model`       | No       | Model to use (e.g., `openai-codex/gpt-5.6-luna`). Falls back to current model |
+| `thinking`    | No       | Thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`  |
+| `tools`       | No       | Comma-separated tool list. Falls back to all default tools                    |
 
 ## Discovery Locations
 
@@ -111,7 +113,7 @@ Agents are discovered from five locations (in priority order — higher override
 | 1 (highest) | `.pi/agents/*.md` (cwd + ancestors)     | Project |
 | 2           | `.agents/agents/*.md` (cwd + ancestors) | Project |
 | 3           | `.claude/agents/*.md` (cwd + ancestors) | Project |
-| 4           | `src/agents/*.md` (config repo)         | Config  |
+| 4           | bundled `src/agents/*.md`               | Config  |
 | 5 (lowest)  | `~/.pi/agent/agents/*.md`               | Global  |
 
-For trusted projects, `.claude/skills/` is also contributed to Pi through `resources_discover`. Native Pi agent definitions override Claude-compatible definitions with the same name.
+Bundled definitions are resolved relative to the installed extension package, so they are available in every working directory as user-scoped agents. For trusted projects, `.claude/skills/` is also contributed to Pi through `resources_discover`. Native Pi agent definitions override Claude-compatible definitions with the same name.

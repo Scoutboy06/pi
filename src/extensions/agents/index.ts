@@ -11,7 +11,7 @@
  *   1. .pi/agents/*.md         (cwd + ancestors)
  *   2. .agents/agents/*.md     (cwd + ancestors)
  *   3. .claude/agents/*.md     (cwd + ancestors, compatibility)
- *   4. pi/agents/*.md          (config repo)
+ *   4. src/agents/*.md         (bundled with this config package)
  *   5. ~/.pi/agent/agents/*.md (global)
  */
 

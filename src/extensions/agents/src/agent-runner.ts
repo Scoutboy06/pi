@@ -20,6 +20,7 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import type { AgentConfig, AgentScope } from "./agent-loader.js";
@@ -310,6 +311,7 @@ export async function runSubagent(
   const args: string[] = ["--mode", "json", "-p", "--no-session"];
 
   if (agent.model) args.push("--model", agent.model);
+  if (agent.thinking) args.push("--thinking", agent.thinking);
   if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 
   let tmpPromptDir: string | null = null;
@@ -648,6 +650,7 @@ export class AgentRunner {
   private activeAgent: AgentConfig | null = null;
   private originalTools: string[] | null = null;
   private originalModel: { provider: string; id: string } | null = null;
+  private originalThinking: ThinkingLevel | null = null;
 
   /** Whether a custom agent persona is currently active. */
   isActive(): boolean {
@@ -671,6 +674,7 @@ export class AgentRunner {
       if (model) {
         this.originalModel = { provider: model.provider, id: model.id };
       }
+      this.originalThinking = pi.getThinkingLevel();
     }
 
     this.activeAgent = agent;
@@ -697,6 +701,10 @@ export class AgentRunner {
           "warning",
         );
       }
+    }
+
+    if (agent.thinking) {
+      pi.setThinkingLevel(agent.thinking);
     }
 
     // Restrict tools if specified
@@ -728,6 +736,11 @@ export class AgentRunner {
         await pi.setModel(found);
       }
       this.originalModel = null;
+    }
+
+    if (this.originalThinking) {
+      pi.setThinkingLevel(this.originalThinking);
+      this.originalThinking = null;
     }
   }
 
