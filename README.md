@@ -14,7 +14,8 @@ Personal pi configuration package.
 │   │   ├── aliases/           #   command aliases
 │   │   ├── btw/               #   /btw side-query command
 │   │   ├── git-updater/       #   background git checker + /update
-│   │   └── instruction-files/ # compatible AGENTS/CLAUDE instruction loading
+│   │   ├── instruction-files/ # compatible AGENTS/CLAUDE instruction loading
+│   │   └── output-styles/     # response style picker + Markdown definitions
 │   ├── prompts/               # Prompt templates (slash commands)
 │   ├── skills/                # Pi-specific agent skills
 │   └── themes/                # Pi themes
