@@ -115,6 +115,12 @@ export function getResultOutput(result: SingleResult): string {
   return getFinalOutput(result.messages) || "(no output)";
 }
 
+/** Return an invocation-specific agent config without mutating the discovered definition. */
+export function withModelOverride(agent: AgentConfig, model?: string): AgentConfig {
+  const requestedModel = model?.trim();
+  return requestedModel ? { ...agent, model: requestedModel } : agent;
+}
+
 // ── Tool call formatting (for display) ─────────────────────────
 
 function shortenPath(p: string): string {
@@ -458,7 +464,7 @@ export async function runSubagent(
  * Run a chain of sub-agents sequentially, passing output via {previous} placeholder.
  */
 export async function runChain(
-  chain: Array<{ agent: string; task: string; cwd?: string }>,
+  chain: Array<{ agent: string; task: string; cwd?: string; model?: string }>,
   cwd: string,
   scope: AgentScope,
   signal: AbortSignal | undefined,
@@ -515,7 +521,7 @@ export async function runChain(
       : undefined;
 
     const result = await runSubagent(
-      agent,
+      withModelOverride(agent, chainStep.model),
       taskWithContext,
       chainStep.cwd ?? cwd,
       signal,
@@ -548,7 +554,7 @@ export async function runChain(
  * Run multiple sub-agents in parallel with concurrency control.
  */
 export async function runParallel(
-  tasks: Array<{ agent: string; task: string; cwd?: string }>,
+  tasks: Array<{ agent: string; task: string; cwd?: string; model?: string }>,
   cwd: string,
   scope: AgentScope,
   signal: AbortSignal | undefined,
@@ -616,7 +622,7 @@ export async function runParallel(
     }
 
     const result = await runSubagent(
-      agent,
+      withModelOverride(agent, t.model),
       t.task,
       t.cwd ?? cwd,
       signal,

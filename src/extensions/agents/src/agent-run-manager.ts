@@ -23,6 +23,7 @@ export interface AgentWorkerLaunchConfig {
   cwd: string;
   registryDir: string;
   sessionDir: string;
+  model?: string;
 }
 
 export interface AgentRunEventSink {
@@ -92,6 +93,7 @@ export class AgentRunManager {
       cwd: record.cwd,
       registryDir: this.registry.baseDir,
       sessionDir: this.registry.getSessionDir(),
+      ...(agent.model ? { model: agent.model } : {}),
     };
     const configPath = this.registry.writeLaunchConfig(record.id, launch);
     const pid = this.launcher.launch(configPath, {

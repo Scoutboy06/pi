@@ -35,6 +35,10 @@ export default function (pi: ExtensionAPI) {
     description: "Start the session with a specific agent persona",
     type: "string",
   });
+  pi.registerFlag("agent-model", {
+    description: "Override the model for the selected agent persona",
+    type: "string",
+  });
 
   // ── Session start: register commands + apply CLI agent ───
 
@@ -74,7 +78,10 @@ export default function (pi: ExtensionAPI) {
       const agent = agents.find((a: AgentConfig) => a.name === cliAgentName);
 
       if (agent) {
-        await runner.apply(agent, pi, ctx);
+        const modelFlag = pi.getFlag("agent-model");
+        const model = typeof modelFlag === "string" ? modelFlag.trim() : "";
+        const invokedAgent = model ? { ...agent, model } : agent;
+        await runner.apply(invokedAgent, pi, ctx);
         ctx.ui.notify(`Agent persona: ${agent.name}`, "info");
       } else {
         ctx.ui.notify(

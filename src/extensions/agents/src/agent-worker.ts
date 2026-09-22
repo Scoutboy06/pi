@@ -33,7 +33,8 @@ function isLaunchConfig(value: unknown): value is AgentWorkerLaunchConfig {
     typeof config.task === "string" &&
     typeof config.cwd === "string" &&
     typeof config.registryDir === "string" &&
-    typeof config.sessionDir === "string"
+    typeof config.sessionDir === "string" &&
+    (config.model === undefined || typeof config.model === "string")
   );
 }
 
@@ -152,28 +153,27 @@ class AgentWorker {
       mode: 0o700,
     });
 
-    this.rpcProcess = spawn(
-      "pi",
-      [
-        "--mode",
-        "rpc",
-        "--session-dir",
-        config.sessionDir,
-        "--name",
-        `agent:${config.agentName}:${config.runId.slice(0, 8)}`,
-        "--agent",
-        config.agentName,
-        "--approve",
-      ],
-      {
-        cwd: config.cwd,
-        env: {
-          ...process.env,
-          PI_AGENT_RUN_ID: config.runId,
-        },
-        stdio: ["pipe", "pipe", "pipe"],
+    const piArgs = [
+      "--mode",
+      "rpc",
+      "--session-dir",
+      config.sessionDir,
+      "--name",
+      `agent:${config.agentName}:${config.runId.slice(0, 8)}`,
+      "--agent",
+      config.agentName,
+      "--approve",
+    ];
+    if (config.model) piArgs.push("--agent-model", config.model);
+
+    this.rpcProcess = spawn("pi", piArgs, {
+      cwd: config.cwd,
+      env: {
+        ...process.env,
+        PI_AGENT_RUN_ID: config.runId,
       },
-    );
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     this.transport = new RpcTransport(this.rpcProcess, (event) => this.handleRpcEvent(event));
     this.server = net.createServer((socket) => this.handleClient(socket));
   }

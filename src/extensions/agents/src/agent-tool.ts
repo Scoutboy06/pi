@@ -26,6 +26,7 @@ import {
   getFinalOutput,
   getResultOutput,
   isFailedResult,
+  withModelOverride,
   type DisplayItem,
   type OnUpdateCallback,
   type SingleResult,
@@ -43,12 +44,18 @@ const TaskItem = Type.Object({
   agent: Type.String({ description: "Name of the agent to invoke" }),
   task: Type.String({ description: "Task to delegate to the agent" }),
   cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+  model: Type.Optional(
+    Type.String({ description: "Model override for this task (provider/model or model ID)" }),
+  ),
 });
 
 const ChainItem = Type.Object({
   agent: Type.String({ description: "Name of the agent to invoke" }),
   task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
   cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+  model: Type.Optional(
+    Type.String({ description: "Model override for this step (provider/model or model ID)" }),
+  ),
 });
 
 const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
@@ -62,6 +69,9 @@ const AgentToolParams = Type.Object({
     Type.String({ description: "Name of the agent to invoke (for single mode)" }),
   ),
   task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
+  model: Type.Optional(
+    Type.String({ description: "Model override for single mode (provider/model or model ID)" }),
+  ),
   tasks: Type.Optional(
     Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" }),
   ),
@@ -139,6 +149,7 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
         "Available agents are listed in the system prompt. Each agent has specific tools and a tailored system prompt. " +
         "For multiple independent tasks, use parallel mode with the tasks array. " +
         "For sequential tasks where each step depends on the previous, use chain mode with the {previous} placeholder.",
+      "Only when the user explicitly asks to list, choose, or verify available subagent models, run `pi --list-models [search]`; do not query the model catalog otherwise.",
     ],
     parameters: AgentToolParams,
 
@@ -307,9 +318,11 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
           };
         }
 
+        const invokedAgent = withModelOverride(agent, params.model);
+
         if (params.background) {
           const run = await runManager.start(
-            agent,
+            invokedAgent,
             params.task,
             params.cwd ?? ctx.cwd,
             params.tags ?? [],
@@ -330,7 +343,7 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
         }
 
         const result = await runSubagent(
-          agent,
+          invokedAgent,
           params.task,
           params.cwd ?? ctx.cwd,
           signal,
@@ -376,7 +389,7 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
 
       // Chain mode
       if (args.chain && Array.isArray(args.chain) && args.chain.length > 0) {
-        const chain = args.chain as Array<{ agent: string; task: string }>;
+        const chain = args.chain as Array<{ agent: string; task: string; model?: string }>;
         let text =
           themeFg("toolTitle", theme.bold("agent ")) +
           themeFg("accent", `chain (${chain.length} steps)`) +
@@ -391,7 +404,8 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
             themeFg("muted", `${i + 1}.`) +
             " " +
             themeFg("accent", step.agent) +
-            themeFg("dim", ` ${preview}`);
+            themeFg("dim", ` ${preview}`) +
+            (step.model ? themeFg("muted", ` [${step.model}]`) : "");
         }
         if (chain.length > 3) text += `\n  ${themeFg("muted", `... +${chain.length - 3} more`)}`;
         return new Text(text, 0, 0);
@@ -399,14 +413,16 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
 
       // Parallel mode
       if (args.tasks && Array.isArray(args.tasks) && args.tasks.length > 0) {
-        const tasks = args.tasks as Array<{ agent: string; task: string }>;
+        const tasks = args.tasks as Array<{ agent: string; task: string; model?: string }>;
         let text =
           themeFg("toolTitle", theme.bold("agent ")) +
           themeFg("accent", `parallel (${tasks.length} tasks)`) +
           themeFg("muted", ` [${scope}]`);
         for (const t of tasks.slice(0, 3)) {
           const preview = t.task.length > 40 ? `${t.task.slice(0, 40)}...` : t.task;
-          text += `\n  ${themeFg("accent", t.agent)}${themeFg("dim", ` ${preview}`)}`;
+          text +=
+            `\n  ${themeFg("accent", t.agent)}${themeFg("dim", ` ${preview}`)}` +
+            (t.model ? themeFg("muted", ` [${t.model}]`) : "");
         }
         if (tasks.length > 3) text += `\n  ${themeFg("muted", `... +${tasks.length - 3} more`)}`;
         return new Text(text, 0, 0);
@@ -424,6 +440,7 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
         themeFg("toolTitle", theme.bold("agent ")) +
         themeFg("accent", agentName) +
         themeFg("muted", ` [${scope}]`) +
+        (args.model ? themeFg("muted", ` [${String(args.model)}]`) : "") +
         (args.background ? themeFg("warning", " background") : "");
       text += `\n  ${themeFg("dim", preview)}`;
       return new Text(text, 0, 0);

@@ -35,11 +35,11 @@ The model can call the `agent` tool to delegate focused tasks to specialized per
 
 **Modes:**
 
-| Mode     | Parameters                           | Description                                            |
-| -------- | ------------------------------------ | ------------------------------------------------------ |
-| Single   | `{ agent, task, background? }`       | One agent, optionally a durable background RPC session |
-| Parallel | `{ tasks: [{ agent, task, cwd? }] }` | Multiple agents run concurrently (max 8, 4 concurrent) |
-| Chain    | `{ chain: [{ agent, task, cwd? }] }` | Sequential execution with `{previous}` placeholder     |
+| Mode     | Parameters                                   | Description                                            |
+| -------- | -------------------------------------------- | ------------------------------------------------------ |
+| Single   | `{ agent, task, model?, background? }`       | One agent, optionally a durable background RPC session |
+| Parallel | `{ tasks: [{ agent, task, cwd?, model? }] }` | Multiple agents run concurrently (max 8, 4 concurrent) |
+| Chain    | `{ chain: [{ agent, task, cwd?, model? }] }` | Sequential execution with `{previous}` placeholder     |
 
 **Scope control:**
 
@@ -47,6 +47,8 @@ The model can call the `agent` tool to delegate focused tasks to specialized per
 - `agentScope: "project"` — only project-local agents (`.pi/agents/`, `.agents/agents/`, `.claude/agents/`)
 - `agentScope: "both"` — all locations, project overrides user (default for session persona, not for tool)
 - Default tool scope is `"user"` for safety
+
+**Invocation model override:** Pass `model` in single mode or on an individual parallel task or chain step, for example `{ agent: "worker", task: "Implement the plan", model: "openai-codex/gpt-5.6-luna" }`. The invocation value overrides the agent definition's `model`; omitting it preserves the definition's behavior.
 
 **Security:** When `agentScope` includes project agents, the tool prompts for confirmation before running project-local agents. Set `confirmProjectAgents: false` to disable.
 

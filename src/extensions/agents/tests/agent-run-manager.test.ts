@@ -61,13 +61,19 @@ describe("AgentRunManager", () => {
     const events = new EventSink();
     const manager = new AgentRunManager(registry, launcher, events);
 
-    const run = await manager.start(agent, "Do work", tmpDir, ["workflow"]);
+    const run = await manager.start(
+      { ...agent, model: "openai-codex/gpt-5.6-luna" },
+      "Do work",
+      tmpDir,
+      ["workflow"],
+    );
 
     expect(run.status).toBe("starting");
     expect(run.pid).toBe(process.pid);
     expect(run.tags).toEqual(["workflow"]);
     expect(launcher.config?.runId).toBe(run.id);
     expect(launcher.config?.agentName).toBe("worker");
+    expect(launcher.config?.model).toBe("openai-codex/gpt-5.6-luna");
     expect(events.updates.at(-1)?.id).toBe(run.id);
   });
 
@@ -107,7 +113,11 @@ process.on("SIGTERM", () => process.exit(0));
     try {
       const run = await manager.start(agent, "Do work", tmpDir);
       let current = run;
-      for (let attempt = 0; attempt < 50 && current.status !== "idle"; attempt++) {
+      for (
+        let attempt = 0;
+        attempt < 50 && (current.status !== "idle" || !current.sessionFile);
+        attempt++
+      ) {
         await Bun.sleep(20);
         current = manager.get(run.id) ?? current;
       }
