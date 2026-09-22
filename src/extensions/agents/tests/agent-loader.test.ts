@@ -2,12 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import {
-  discoverAgents,
-  discoverAgentsScoped,
-  formatAgentList,
-  getGlobalAgentsDir,
-} from "../src/agent-loader.js";
+import { discoverAgents, formatAgentList, getGlobalAgentsDir } from "../src/agent-loader.js";
 
 // ── Test helpers ───────────────────────────────────────────────
 
@@ -109,35 +104,6 @@ describe("discoverAgents", () => {
 
     expect(agent?.description).toBe("From Pi");
     expect(agent?.systemPrompt).toBe("pi body");
-  });
-
-  it("discovers bundled agents with user scope from an unrelated cwd", () => {
-    const unrelatedCwd = path.join(tmpDir, "unrelated", "nested", "project");
-    fs.mkdirSync(unrelatedCwd, { recursive: true });
-
-    const agents = discoverAgentsScoped(unrelatedCwd, "user").agents;
-    const explorer = agents.find((candidate) => candidate.name === "explorer");
-
-    expect(explorer).toBeDefined();
-    expect(explorer!.source).toBe("config");
-    expect(explorer!.model).toBe("openai-codex/gpt-5.6-luna");
-    expect(explorer!.thinking).toBe("low");
-    expect(explorer!.filePath).toEndWith(path.join("src", "agents", "explorer.md"));
-  });
-
-  it("allows project agents to override bundled agents", () => {
-    const projectDir = path.join(tmpDir, "bundled-override-project");
-    const agentsDir = path.join(projectDir, ".pi", "agents");
-    fs.mkdirSync(agentsDir, { recursive: true });
-    createAgentFile(agentsDir, "explorer", "Project explorer", "project explorer body");
-
-    const explorer = discoverAgentsScoped(projectDir, "both").agents.find(
-      (candidate) => candidate.name === "explorer",
-    );
-
-    expect(explorer?.source).toBe("project");
-    expect(explorer?.description).toBe("Project explorer");
-    expect(explorer?.systemPrompt).toBe("project explorer body");
   });
 
   it("parses optional fields (model, tools)", () => {

@@ -17,7 +17,7 @@ Persona-based agent delegation for pi. Define specialized agents as markdown fil
 ### Slash command (replaces session persona)
 
 ```
-/agent:explorer Find the authentication module
+/agent:scout Find the authentication module
 /agent:default
 ```
 
@@ -26,7 +26,7 @@ The persona persists until you switch to another agent or revert with `/agent:de
 ### CLI flag (applies at session start)
 
 ```bash
-pi --agent explorer "Explore the codebase structure"
+pi --agent scout "Explore the codebase structure"
 ```
 
 ### LLM tool (delegates to sub-agent)
@@ -35,11 +35,11 @@ The model can call the `agent` tool to delegate focused tasks to specialized per
 
 **Modes:**
 
-| Mode     | Parameters                                   | Description                                            |
-| -------- | -------------------------------------------- | ------------------------------------------------------ |
-| Single   | `{ agent, task, model?, background? }`       | One agent, optionally a durable background RPC session |
-| Parallel | `{ tasks: [{ agent, task, cwd?, model? }] }` | Multiple agents run concurrently (max 8, 4 concurrent) |
-| Chain    | `{ chain: [{ agent, task, cwd?, model? }] }` | Sequential execution with `{previous}` placeholder     |
+| Mode     | Parameters                                   | Description                                              |
+| -------- | -------------------------------------------- | -------------------------------------------------------- |
+| Single   | `{ agent, task, model?, background? }`       | One durable RPC agent run                                |
+| Parallel | `{ tasks: [{ agent, task, cwd?, model? }] }` | Multiple durable runs concurrently (max 8, 4 concurrent) |
+| Chain    | `{ chain: [{ agent, task, cwd?, model? }] }` | Sequential durable runs with `{previous}` placeholder    |
 
 **Scope control:**
 
@@ -48,7 +48,7 @@ The model can call the `agent` tool to delegate focused tasks to specialized per
 - `agentScope: "both"` — all locations, project overrides user (default for session persona, not for tool)
 - Default tool scope is `"user"` for safety
 
-**Invocation model override:** Pass `model` in single mode or on an individual parallel task or chain step, for example `{ agent: "worker", task: "Implement the plan", model: "openai-codex/gpt-5.6-luna" }`. The invocation value overrides the agent definition's `model`; omitting it preserves the definition's behavior.
+**Invocation model override:** Pass `model` in single mode or on an individual parallel task or chain step, for example `{ agent: "executor", task: "Implement the plan", model: "openai-codex/gpt-5.6-luna" }`. The invocation value overrides the agent definition's `model`; omitting it preserves the definition's behavior.
 
 **Security:** When `agentScope` includes project agents, the tool prompts for confirmation before running project-local agents. Set `confirmProjectAgents: false` to disable.
 
@@ -58,11 +58,11 @@ The model can call the `agent` tool to delegate focused tasks to specialized per
 - **Expanded view (Ctrl+O):** Full task text, all tool calls with formatted arguments (bash/read/write/edit/ls/find/grep), final output rendered as Markdown, per-task usage stats, aggregate totals
 - **Streaming:** Live progress updates ("running...", "2/3 done, 1 running")
 
-### Durable background runs
+### Durable agent runs
 
-Set `background: true` in single mode to return immediately with a stable run ID. The detached worker keeps a persistent Pi RPC session alive after the parent Pi session exits.
+Every invocation creates a durable RPC run and returns its stable run ID in tool details (and output). Foreground single, parallel, and chain invocations wait for their initial turns, while workers remain alive and messageable afterward. Set `background: true` only for single mode to return immediately; the detached worker keeps a persistent Pi RPC session alive after the parent Pi session exits.
 
-Use the `agent_run` tool to:
+Use the `agent_run` tool with the returned run ID to:
 
 - `list` or `get` run state
 - send a new `message` when idle
@@ -78,14 +78,14 @@ Create `.md` files with YAML frontmatter:
 
 ```markdown
 ---
-name: explorer
+name: scout
 description: Fast, read-only agent for searching and exploring codebases
 model: openai-codex/gpt-5.6-luna
 thinking: low
 tools: read, grep, find, ls
 ---
 
-You are a codebase explorer. Your job is to search, discover, and
+You are a codebase scout. Your job is to search, discover, and
 understand code quickly.
 
 When given a task:

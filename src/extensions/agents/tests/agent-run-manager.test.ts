@@ -38,6 +38,35 @@ class WorkerLauncher implements AgentWorkerLauncher {
   }
 }
 
+class FailingStopLauncher extends WorkerLauncher {
+  terminatedPid?: number;
+
+  terminate(pid: number): void {
+    this.terminatedPid = pid;
+  }
+}
+
+class InitialTurnLauncher extends WorkerLauncher {
+  launch(configPath: string): number {
+    const pid = super.launch(configPath);
+    const runId = this.config?.runId;
+    if (runId) {
+      setTimeout(
+        () =>
+          registry.update(runId, {
+            status: "idle",
+            lastAssistantText: "initial output",
+            lastEvent: "agent_settled",
+            settledGeneration: 1,
+            initialTurnCaptured: true,
+          }),
+        10,
+      );
+    }
+    return pid;
+  }
+}
+
 class EventSink implements AgentRunEventSink {
   readonly updates: AgentRunRecord[] = [];
 
@@ -77,6 +106,20 @@ describe("AgentRunManager", () => {
     expect(events.updates.at(-1)?.id).toBe(run.id);
   });
 
+  it("waits for the initial turn only when requested", async () => {
+    const manager = new AgentRunManager(registry, new InitialTurnLauncher());
+    const updates: string[] = [];
+
+    const run = await manager.start(agent, "Do work", tmpDir, [], {
+      waitForInitialTurn: true,
+      onUpdate: (update) => updates.push(update.status),
+    });
+
+    expect(run.status).toBe("idle");
+    expect(run.lastAssistantText).toBe("initial output");
+    expect(updates).toContain("starting");
+  });
+
   it("keeps a detached RPC worker messageable until stopped", async () => {
     const binDir = path.join(tmpDir, "bin");
     fs.mkdirSync(binDir);
@@ -95,9 +138,14 @@ process.stdin.on("data", (chunk) => {
     const respond = (data) => process.stdout.write(JSON.stringify(data) + "\\n");
     respond({ type: "response", id: command.id, command: command.type, success: true,
       ...(command.type === "get_state" ? { data: { sessionFile: "/tmp/fake-session.jsonl", model: { provider: "fake", id: "model" } } } : {}) });
-    if (command.type === "prompt") {
+    if (command.type === "prompt" || command.type === "follow_up") {
       respond({ type: "agent_start" });
-      respond({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "done" }] } });
+      respond({ type: "message_end", message: { role: "assistant", model: "fake/model", stopReason: "end", usage: { input: 7, output: 3, totalTokens: 10, cost: { total: 0.01 } }, content: [{ type: "text", text: "done" }, { type: "toolCall", name: "read", arguments: { path: "x" } }] } });
+      respond({ type: "tool_result_end", message: { role: "toolResult", toolCallId: "1", content: [{ type: "text", text: "result" }] } });
+      if (command.type === "follow_up") {
+        respond({ type: "message_end", message: { role: "assistant", model: "fake/model", content: [{ type: "text", text: "follow-up output" }] } });
+        respond({ type: "tool_result_end", message: { role: "toolResult", content: [{ type: "text", text: "follow-up result" }] } });
+      }
       respond({ type: "agent_settled" });
     }
   }
@@ -124,8 +172,20 @@ process.on("SIGTERM", () => process.exit(0));
       expect(current.status).toBe("idle");
       expect(current.sessionFile).toBe("/tmp/fake-session.jsonl");
       expect(current.lastAssistantText).toBe("done");
+      expect(current.messages?.map((message) => message.role)).toEqual(["assistant", "toolResult"]);
+      expect(current.messages?.[0]?.content).toHaveLength(2);
+      expect(current.usage).toMatchObject({ input: 7, output: 3, turns: 1, contextTokens: 10 });
+      expect(current.model).toBe("fake/model");
+      expect(current.stopReason).toBe("end");
 
-      await manager.command(run.id, { action: "message", message: "Continue" });
+      const initialMessages = current.messages;
+      const followUp = await manager.command(run.id, { action: "follow_up", message: "Continue" });
+      current = manager.get(run.id) ?? current;
+      expect(followUp.settledGeneration).toBe(2);
+      expect(followUp.messages).toEqual(initialMessages);
+      expect(followUp.lastAssistantText).toBe("follow-up output");
+      expect(current.lastAssistantText).toBe("follow-up output");
+
       await manager.command(run.id, { action: "stop" });
       for (let attempt = 0; attempt < 50 && current.status !== "stopped"; attempt++) {
         await Bun.sleep(20);
@@ -135,6 +195,82 @@ process.on("SIGTERM", () => process.exit(0));
     } finally {
       process.env.PATH = originalPath;
     }
+  });
+
+  it("falls back to terminating the detached worker when stop RPC fails", async () => {
+    const launcher = new FailingStopLauncher();
+    const manager = new AgentRunManager(registry, launcher);
+    const run = await manager.start(agent, "Do work", tmpDir);
+
+    const result = await manager.command(run.id, { action: "stop" });
+
+    expect(launcher.terminatedPid).toBe(process.pid);
+    expect(result.status).toBe("stopped");
+    expect(manager.get(run.id)?.status).toBe("stopped");
+  });
+
+  it("represents an aborted initial turn as an error while keeping the run idle", async () => {
+    const run = registry.create({
+      agent: "worker",
+      agentSource: "project",
+      task: "Do work",
+      cwd: tmpDir,
+    });
+    fs.mkdirSync(path.dirname(run.socketPath), { recursive: true });
+    const server = net.createServer((socket) => {
+      const idle = registry.update(run.id, { status: "idle" });
+      socket.end(`${JSON.stringify({ success: true, run: idle })}\n`);
+    });
+    await new Promise<void>((resolve) => server.listen(run.socketPath, resolve));
+    const manager = new AgentRunManager(registry);
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await manager.waitForInitialTurn(run.id, controller.signal);
+
+    expect(result.status).toBe("idle");
+    expect(result.initialTurnOutcome).toBe("aborted");
+    expect(result.errorMessage).toBe("Initial turn was aborted");
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it("waits for a new settled generation even when the output is unchanged", async () => {
+    const run = registry.create({
+      agent: "worker",
+      agentSource: "project",
+      task: "Do work",
+      cwd: tmpDir,
+    });
+    const initial = registry.update(run.id, {
+      status: "idle",
+      lastAssistantText: "same output",
+      settledGeneration: 1,
+    });
+    fs.mkdirSync(path.dirname(run.socketPath), { recursive: true });
+    const server = net.createServer((socket) => {
+      socket.setEncoding("utf-8");
+      socket.on("data", () => {
+        socket.end(`${JSON.stringify({ success: true, run: initial })}\n`);
+        setTimeout(
+          () =>
+            registry.update(run.id, {
+              status: "idle",
+              lastEvent: "agent_settled",
+              lastAssistantText: "same output",
+              settledGeneration: 2,
+            }),
+          10,
+        );
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(run.socketPath, resolve));
+    const manager = new AgentRunManager(registry);
+
+    const result = await manager.command(run.id, { action: "follow_up", message: "Again" });
+
+    expect(result.settledGeneration).toBe(2);
+    expect(result.lastAssistantText).toBe("same output");
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
   it("sends control commands over the run socket", async () => {
@@ -150,7 +286,12 @@ process.on("SIGTERM", () => process.exit(0));
       socket.setEncoding("utf-8");
       socket.on("data", (data: string) => {
         received = JSON.parse(data.trim());
-        socket.end(`${JSON.stringify({ success: true, run })}\n`);
+        const settled = registry.update(run.id, {
+          status: "idle",
+          lastEvent: "agent_settled",
+          settledGeneration: 1,
+        });
+        socket.end(`${JSON.stringify({ success: true, run: settled })}\n`);
       });
     });
     await new Promise<void>((resolve) => server.listen(run.socketPath, resolve));

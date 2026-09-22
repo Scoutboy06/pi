@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 import * as path from "node:path";
 import type { AgentWorkerLaunchConfig } from "./agent-run-manager.js";
-import { AgentRunRegistry, type AgentRunRecord } from "./agent-run-registry.js";
+import { AgentRunRegistry, type AgentRunRecord, type AgentRunUsage } from "./agent-run-registry.js";
 
 interface RpcResponse {
   type: "response";
@@ -23,6 +23,12 @@ interface WorkerResponse {
   error?: string;
   run?: AgentRunRecord;
 }
+
+// The foreground caller only consumes the initial turn's structured messages.
+// Keep that snapshot useful without allowing tool-heavy runs to grow forever.
+const MAX_INITIAL_MESSAGES = 100;
+const MAX_INITIAL_MESSAGES_BYTES = 256 * 1024;
+const ABORT_RPC_TIMEOUT_MS = 2_000;
 
 function isLaunchConfig(value: unknown): value is AgentWorkerLaunchConfig {
   if (!value || typeof value !== "object") return false;
@@ -260,7 +266,16 @@ class AgentWorker {
       return;
     }
     if (type === "agent_settled") {
-      this.persist({ status: "idle", lastEvent: type }, true);
+      const current = this.registry.get(this.config.runId);
+      this.persist(
+        {
+          status: "idle",
+          lastEvent: type,
+          settledGeneration: (current?.settledGeneration ?? 0) + 1,
+          initialTurnCaptured: true,
+        },
+        true,
+      );
       void this.refreshState();
       return;
     }
@@ -269,9 +284,62 @@ class AgentWorker {
       this.persist({ lastEvent: type, statusDetail: `Using ${toolName}` });
       return;
     }
-    if (type === "message_end") {
-      const text = getText(event.message);
-      this.persist({ lastEvent: type, ...(text ? { lastAssistantText: text } : {}) }, true);
+    if (type === "message_end" || type === "tool_result_end") {
+      const message = event.message;
+      const text = getText(message);
+      const record = this.registry.get(this.config.runId);
+      const messages = [...(record?.messages ?? [])];
+      if (
+        !record?.initialTurnCaptured &&
+        message &&
+        typeof message === "object" &&
+        messages.length < MAX_INITIAL_MESSAGES
+      ) {
+        const candidate = message as Record<string, unknown>;
+        const candidateBytes = Buffer.byteLength(JSON.stringify(candidate), "utf8");
+        const currentBytes = Buffer.byteLength(JSON.stringify(messages), "utf8");
+        if (currentBytes + candidateBytes <= MAX_INITIAL_MESSAGES_BYTES) messages.push(candidate);
+      }
+      const patch: Partial<AgentRunRecord> = {
+        lastEvent: type,
+        ...(messages.length > 0 && !record?.initialTurnCaptured ? { messages } : {}),
+        ...(text &&
+        message &&
+        typeof message === "object" &&
+        (message as Record<string, unknown>).role === "assistant"
+          ? { lastAssistantText: text }
+          : {}),
+      };
+      if (type === "message_end" && message && typeof message === "object") {
+        const assistant = message as Record<string, unknown>;
+        const usage = assistant.usage as Record<string, unknown> | undefined;
+        const previous: AgentRunUsage = record?.usage ?? {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          cost: 0,
+          contextTokens: 0,
+          turns: 0,
+        };
+        if (assistant.role === "assistant") {
+          const cost = usage?.cost as Record<string, unknown> | undefined;
+          patch.usage = {
+            input: previous.input + Number(usage?.input ?? 0),
+            output: previous.output + Number(usage?.output ?? 0),
+            cacheRead: previous.cacheRead + Number(usage?.cacheRead ?? 0),
+            cacheWrite: previous.cacheWrite + Number(usage?.cacheWrite ?? 0),
+            cost: previous.cost + Number(cost?.total ?? 0),
+            contextTokens: Number(usage?.totalTokens ?? previous.contextTokens),
+            turns: previous.turns + 1,
+          };
+          if (typeof assistant.model === "string") patch.model = assistant.model;
+          if (typeof assistant.stopReason === "string") patch.stopReason = assistant.stopReason;
+          if (typeof assistant.errorMessage === "string")
+            patch.errorMessage = assistant.errorMessage;
+        }
+      }
+      this.persist(patch, true);
       return;
     }
     this.persist({ lastEvent: type });
@@ -331,8 +399,30 @@ class AgentWorker {
     if (command.action === "stop") {
       this.stopping = true;
       this.persist({ status: "stopping", lastEvent: "stop_requested" }, true);
-      await this.transport.request({ type: "abort" });
-      this.rpcProcess.kill("SIGTERM");
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          this.transport.request({ type: "abort" }),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error("Timed out waiting for RPC abort")),
+              ABORT_RPC_TIMEOUT_MS,
+            );
+          }),
+        ]);
+      } catch (error: unknown) {
+        this.persist(
+          { statusDetail: error instanceof Error ? error.message : String(error) },
+          true,
+        );
+      } finally {
+        if (timer) clearTimeout(timer);
+        try {
+          this.rpcProcess.kill("SIGTERM");
+        } catch {
+          // The RPC child may have exited while abort was pending.
+        }
+      }
       return this.registry.get(this.config.runId) ?? this.persist({ status: "stopping" }, true);
     }
 

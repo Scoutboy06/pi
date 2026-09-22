@@ -10,17 +10,19 @@ import {
 
 const RunActionSchema = StringEnum(
   ["list", "get", "message", "steer", "follow_up", "abort", "stop"] as const,
-  { description: "Operation to perform on durable background agent runs" },
+  { description: "Operation to perform on durable agent runs" },
 );
 
 const StatusSchema = StringEnum(["working", "paused", "blocked"] as const, {
   description: "Explicit semantic state for the current managed agent run",
 });
 
-function formatRun(run: AgentRunRecord): string {
+export function formatRun(run: AgentRunRecord, includeAssistantText = false): string {
   const parent = run.parentRunId ? ` parent:${run.parentRunId.slice(0, 8)}` : "";
   const detail = run.statusDetail ? ` — ${run.statusDetail}` : "";
-  return `${run.id} ${run.agent} [${run.status}]${parent} ${run.cwd}${detail}`;
+  const assistant =
+    includeAssistantText && run.lastAssistantText ? `\nAssistant: ${run.lastAssistantText}` : "";
+  return `${run.id} ${run.agent} [${run.status}]${parent} ${run.cwd}${detail}${assistant}`;
 }
 
 export function registerAgentRunTools(
@@ -32,15 +34,16 @@ export function registerAgentRunTools(
     name: "agent_run",
     label: "Agent Run",
     description:
-      "List, inspect, message, steer, abort, or stop durable background agent runs. " +
+      "List, inspect, message, steer, abort, or stop durable agent runs. " +
+      "Foreground and background agent-tool runs can be controlled by stable run ID. " +
       "message sends a new prompt to an idle run; steer and follow_up target a working run.",
-    promptSnippet: "Inspect and control durable background agent runs",
+    promptSnippet: "Inspect and control durable agent runs",
     promptGuidelines: [
-      "Use agent_run to inspect or communicate with background agents previously started by the agent tool.",
+      "Use agent_run with the stable run ID to inspect or communicate with agents previously started by the agent tool.",
     ],
     parameters: Type.Object({
       action: RunActionSchema,
-      runId: Type.Optional(Type.String({ description: "Stable background run ID" })),
+      runId: Type.Optional(Type.String({ description: "Stable agent run ID" })),
       message: Type.Optional(
         Type.String({ description: "Message for message, steer, or follow_up" }),
       ),
@@ -52,7 +55,8 @@ export function registerAgentRunTools(
           content: [
             {
               type: "text",
-              text: runs.length > 0 ? runs.map(formatRun).join("\n") : "No agent runs.",
+              text:
+                runs.length > 0 ? runs.map((run) => formatRun(run)).join("\n") : "No agent runs.",
             },
           ],
           details: { runs },
@@ -63,7 +67,10 @@ export function registerAgentRunTools(
       if (params.action === "get") {
         const run = manager.get(params.runId);
         if (!run) throw new Error(`Unknown agent run: ${params.runId}`);
-        return { content: [{ type: "text", text: formatRun(run) }], details: { runs: [run] } };
+        return {
+          content: [{ type: "text", text: formatRun(run, true) }],
+          details: { runs: [run] },
+        };
       }
 
       const action: AgentRunCommandAction = params.action;
@@ -78,7 +85,7 @@ export function registerAgentRunTools(
         ...(params.message?.trim() ? { message: params.message.trim() } : {}),
       });
       return {
-        content: [{ type: "text", text: formatRun(run) }],
+        content: [{ type: "text", text: formatRun(run, true) }],
         details: { runs: [run] },
       };
     },

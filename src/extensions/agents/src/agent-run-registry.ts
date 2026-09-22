@@ -7,6 +7,16 @@ export type AgentRunLifecycle = "starting" | "working" | "idle" | "stopping" | "
 export type AgentReportedStatus = "working" | "paused" | "blocked";
 export type AgentRunStatus = AgentRunLifecycle | "paused" | "blocked";
 
+export interface AgentRunUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cost: number;
+  contextTokens: number;
+  turns: number;
+}
+
 export interface AgentRunRecord {
   version: 1;
   id: string;
@@ -23,7 +33,16 @@ export interface AgentRunRecord {
   lastActivityAt: string;
   lastEvent?: string;
   lastAssistantText?: string;
+  messages?: Array<Record<string, unknown>>;
+  /** Monotonically increases whenever an agent turn reaches agent_settled. */
+  settledGeneration: number;
+  /** True after the first agent turn settles; later turns update summaries only. */
+  initialTurnCaptured?: boolean;
+  usage?: AgentRunUsage;
   model?: string;
+  stopReason?: string;
+  errorMessage?: string;
+  initialTurnOutcome?: "aborted" | "error";
   pid?: number;
   rpcPid?: number;
   socketPath: string;
@@ -123,6 +142,7 @@ export class AgentRunRegistry {
       updatedAt: now,
       lastActivityAt: now,
       socketPath: this.getSocketPath(id),
+      settledGeneration: 0,
     };
     if (input.parentRunId) record.parentRunId = input.parentRunId;
     this.write(record);
@@ -148,9 +168,13 @@ export class AgentRunRegistry {
   update(id: string, patch: Partial<AgentRunRecord>): AgentRunRecord {
     const currentValue = readJson(this.getRecordPath(id));
     if (!isAgentRunRecord(currentValue)) throw new Error(`Unknown agent run: ${id}`);
+    const protectedFailure =
+      currentValue.status === "failed" && patch.status !== undefined && patch.status !== "failed";
     const updated: AgentRunRecord = {
       ...currentValue,
+      settledGeneration: currentValue.settledGeneration ?? 0,
       ...patch,
+      ...(protectedFailure ? { status: "failed" as const } : {}),
       id: currentValue.id,
       version: 1,
       updatedAt: new Date().toISOString(),
@@ -214,18 +238,19 @@ export class AgentRunRegistry {
   }
 
   private mergeReportedStatus(record: AgentRunRecord): AgentRunRecord {
-    if (!isActiveStatus(record.status)) return record;
-    if (record.pid && !isProcessAlive(record.pid)) {
+    const normalized = { ...record, settledGeneration: record.settledGeneration ?? 0 };
+    if (!isActiveStatus(normalized.status)) return normalized;
+    if (normalized.pid && !isProcessAlive(normalized.pid)) {
       return {
-        ...record,
+        ...normalized,
         status: "stopped",
         statusDetail: "Worker process is not running",
       };
     }
     const value = readJson(this.getStatusPath(record.id));
-    if (!isReportedStatusRecord(value)) return record;
+    if (!isReportedStatusRecord(value)) return normalized;
     const merged: AgentRunRecord = {
-      ...record,
+      ...normalized,
       status: value.status,
       updatedAt: value.updatedAt > record.updatedAt ? value.updatedAt : record.updatedAt,
     };

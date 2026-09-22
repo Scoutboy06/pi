@@ -43,6 +43,7 @@ export interface UsageStats {
 }
 
 export interface SingleResult {
+  runId?: string;
   agent: string;
   agentSource: string;
   task: string;
@@ -61,6 +62,7 @@ export interface SubagentDetails {
   agentScope: AgentScope;
   projectAgentsDir: string | null;
   results: SingleResult[];
+  runIds?: string[];
   backgroundRunId?: string;
 }
 
@@ -487,6 +489,22 @@ export async function runChain(
     const chainStep = chain[i];
     if (!chainStep) continue;
     const taskWithContext = chainStep.task.replace(/\{previous\}/g, previousOutput);
+    if (signal?.aborted) {
+      const aborted: SingleResult = {
+        agent: chainStep.agent,
+        agentSource: "unknown",
+        task: taskWithContext,
+        exitCode: 1,
+        messages: [],
+        stderr: "",
+        usage: makeEmptyUsage(),
+        stopReason: "aborted",
+        errorMessage: "Chain step was aborted before it started",
+        step: i + 1,
+      };
+      results.push(aborted);
+      return { results, finalOutput: getResultOutput(aborted), isError: true };
+    }
 
     // Find agent
     const agent = agents.find((a: AgentConfig) => a.name === chainStep.agent);
@@ -602,6 +620,22 @@ export async function runParallel(
   };
 
   const results = await mapWithConcurrencyLimit(tasks, MAX_CONCURRENCY, async (t, index) => {
+    if (signal?.aborted) {
+      const aborted: SingleResult = {
+        agent: t.agent,
+        agentSource: "unknown",
+        task: t.task,
+        exitCode: 1,
+        messages: [],
+        stderr: "",
+        usage: makeEmptyUsage(),
+        stopReason: "aborted",
+        errorMessage: "Task was aborted before it started",
+      };
+      allResults[index] = aborted;
+      emitParallelUpdate();
+      return aborted;
+    }
     const agent = agents.find((a: AgentConfig) => a.name === t.agent);
     if (!agent) {
       const errResult: SingleResult = {

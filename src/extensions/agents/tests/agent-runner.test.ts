@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import type { AgentConfig } from "../src/agent-loader.js";
-import { AgentRunner, withModelOverride } from "../src/agent-runner.js";
+import { AgentRunner, runParallel, withModelOverride } from "../src/agent-runner.js";
 
 // ── Tests ──────────────────────────────────────────────────────
 
@@ -23,6 +23,32 @@ describe("withModelOverride", () => {
 
   it("keeps the definition model when no invocation override is supplied", () => {
     expect(withModelOverride(agent)).toBe(agent);
+  });
+});
+
+describe("runParallel", () => {
+  it("does not launch queued tasks after cancellation and marks them aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await runParallel(
+      [
+        { agent: "first", task: "one" },
+        { agent: "second", task: "two" },
+        { agent: "third", task: "three" },
+      ],
+      process.cwd(),
+      "user",
+      controller.signal,
+      undefined,
+      null,
+    );
+
+    expect(result.results).toHaveLength(3);
+    expect(result.results.every((item) => item.stopReason === "aborted")).toBe(true);
+    expect(result.results.every((item) => item.errorMessage?.includes("before it started"))).toBe(
+      true,
+    );
   });
 });
 

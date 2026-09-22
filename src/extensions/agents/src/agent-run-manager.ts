@@ -2,12 +2,15 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as net from "node:net";
 import * as path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import type { AgentConfig } from "./agent-loader.js";
 import { AgentRunRegistry, type AgentRunRecord } from "./agent-run-registry.js";
 
 const COMMAND_TIMEOUT_MS = 10_000;
 const START_TIMEOUT_MS = 5_000;
+const INITIAL_TURN_TIMEOUT_MS = 10 * 60_000;
+const COMMAND_TURN_TIMEOUT_MS = 10 * 60_000;
 
 export type AgentRunCommandAction = "message" | "steer" | "follow_up" | "abort" | "stop";
 
@@ -32,6 +35,7 @@ export interface AgentRunEventSink {
 
 export interface AgentWorkerLauncher {
   launch(configPath: string, environment: NodeJS.ProcessEnv): number | undefined;
+  terminate?(pid: number): void;
 }
 
 class BunAgentWorkerLauncher implements AgentWorkerLauncher {
@@ -76,6 +80,11 @@ export class AgentRunManager {
     task: string,
     cwd: string,
     tags: string[] = [],
+    options: {
+      waitForInitialTurn?: boolean;
+      signal?: AbortSignal;
+      onUpdate?: (run: AgentRunRecord) => void;
+    } = {},
   ): Promise<AgentRunRecord> {
     const parentRunId = process.env.PI_AGENT_RUN_ID;
     const record = this.registry.create({
@@ -118,7 +127,14 @@ export class AgentRunManager {
 
     const starting = this.registry.update(record.id, { pid });
     this.emit(starting);
-    return this.waitUntilReady(starting.id);
+    const ready = await this.waitUntilReady(starting.id);
+    if (ready.status === "failed" || !options.waitForInitialTurn) return ready;
+    return this.waitForInitialTurn(
+      ready.id,
+      options.signal,
+      options.onUpdate,
+      starting.settledGeneration,
+    );
   }
 
   list(): AgentRunRecord[] {
@@ -132,13 +148,28 @@ export class AgentRunManager {
   async command(id: string, command: AgentRunCommand): Promise<AgentRunRecord> {
     const run = this.registry.get(id);
     if (!run) throw new Error(`Unknown agent run: ${id}`);
-    const response = await this.send(run.socketPath, command);
-    if (!response.success)
-      throw new Error(response.error ?? `Agent run command failed: ${command.action}`);
-    const updated = response.run ?? this.registry.get(id);
-    if (!updated) throw new Error(`Agent run disappeared: ${id}`);
-    this.emit(updated);
-    return updated;
+    const generation = run.settledGeneration;
+    try {
+      const response = await this.send(run.socketPath, command);
+      if (!response.success)
+        throw new Error(response.error ?? `Agent run command failed: ${command.action}`);
+      const updated = response.run ?? this.registry.get(id);
+      if (!updated) throw new Error(`Agent run disappeared: ${id}`);
+      if (
+        command.action === "message" ||
+        command.action === "steer" ||
+        command.action === "follow_up"
+      ) {
+        return this.waitForTurn(id, generation);
+      }
+      this.emit(updated);
+      return updated;
+    } catch (error: unknown) {
+      if (command.action !== "stop") throw error;
+      const stopped = await this.stopDetachedWorker(run);
+      this.emit(stopped);
+      return stopped;
+    }
   }
 
   watch(): void {
@@ -161,6 +192,78 @@ export class AgentRunManager {
     this.eventSink?.emit("agents:run-updated", run);
   }
 
+  async waitForInitialTurn(
+    id: string,
+    signal?: AbortSignal,
+    onUpdate?: (run: AgentRunRecord) => void,
+    previousGeneration?: number,
+  ): Promise<AgentRunRecord> {
+    const deadline = Date.now() + INITIAL_TURN_TIMEOUT_MS;
+    const initialGeneration = previousGeneration ?? this.registry.get(id)?.settledGeneration ?? 0;
+    let previous = "";
+    while (Date.now() < deadline) {
+      const run = this.registry.get(id);
+      if (!run) throw new Error(`Agent run disappeared during initial turn: ${id}`);
+      if (signal?.aborted) {
+        try {
+          await this.command(id, { action: "abort" });
+          return this.registry.update(id, {
+            initialTurnOutcome: "aborted",
+            errorMessage: "Initial turn was aborted",
+          });
+        } catch (error) {
+          return this.registry.update(id, {
+            initialTurnOutcome: "error",
+            errorMessage: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      if (run.status === "failed" || run.status === "stopped") return run;
+      // Do not use idle alone: a worker can briefly report idle before its
+      // agent_start event is persisted. A settled generation identifies this
+      // particular turn and is safe even when the output is unchanged.
+      if (run.settledGeneration > initialGeneration) return run;
+      const fingerprint = `${run.status}:${run.lastEvent ?? ""}:${run.lastAssistantText ?? ""}`;
+      if (fingerprint !== previous) {
+        previous = fingerprint;
+        onUpdate?.(run);
+        this.emit(run);
+      }
+      await delay(50);
+    }
+    const timedOut = this.registry.update(id, {
+      status: "failed",
+      error: "Agent initial turn timed out",
+      errorMessage: "Agent initial turn timed out",
+    });
+    await this.stopDetachedWorker(timedOut);
+    return this.registry.get(id) ?? timedOut;
+  }
+
+  private async waitForTurn(id: string, previousGeneration: number): Promise<AgentRunRecord> {
+    const deadline = Date.now() + COMMAND_TURN_TIMEOUT_MS;
+    let previous = "";
+    while (Date.now() < deadline) {
+      const run = this.registry.get(id);
+      if (!run) throw new Error(`Agent run disappeared during command: ${id}`);
+      if (run.status === "failed" || run.status === "stopped") return run;
+      const fingerprint = `${run.status}:${run.lastEvent ?? ""}:${run.lastAssistantText ?? ""}:${run.settledGeneration}`;
+      if (fingerprint !== previous) {
+        previous = fingerprint;
+        this.emit(run);
+      }
+      if (run.settledGeneration > previousGeneration) return run;
+      await delay(50);
+    }
+    const timedOut = this.registry.update(id, {
+      status: "failed",
+      error: "Agent command turn timed out",
+      errorMessage: "Agent command turn timed out",
+    });
+    await this.stopDetachedWorker(timedOut);
+    return this.registry.get(id) ?? timedOut;
+  }
+
   private async waitUntilReady(id: string): Promise<AgentRunRecord> {
     const deadline = Date.now() + START_TIMEOUT_MS;
     while (Date.now() < deadline) {
@@ -168,12 +271,54 @@ export class AgentRunManager {
       if (!run) throw new Error(`Agent run disappeared during startup: ${id}`);
       if (run.status === "failed") return run;
       if (fs.existsSync(run.socketPath)) return run;
-      await Bun.sleep(50);
+      await delay(50);
     }
-    return this.registry.update(id, {
+    const timedOut = this.registry.update(id, {
       status: "failed",
       error: "Agent worker startup timed out",
+      errorMessage: "Agent worker startup timed out",
     });
+    await this.stopDetachedWorker(timedOut);
+    return this.registry.get(id) ?? timedOut;
+  }
+
+  private async stopDetachedWorker(run: AgentRunRecord): Promise<AgentRunRecord> {
+    const stopping = this.registry.update(run.id, {
+      status: "stopping",
+      statusDetail: "Stop requested",
+      lastEvent: "stop_requested",
+    });
+
+    // Send the stop request directly. Calling command() here would recurse into
+    // this fallback when the worker is already unresponsive.
+    if (fs.existsSync(run.socketPath)) {
+      try {
+        const response = await this.send(run.socketPath, { action: "stop" });
+        if (response.success) {
+          const updated = response.run ?? this.registry.get(run.id);
+          if (updated) return updated;
+        }
+      } catch {
+        // Fall through to terminating the detached worker process.
+      }
+    }
+
+    if (!run.pid) return stopping;
+    try {
+      if (this.launcher.terminate) this.launcher.terminate(run.pid);
+      else process.kill(run.pid, "SIGTERM");
+      return this.registry.update(run.id, {
+        status: "stopped",
+        statusDetail: "Worker terminated after stop request failed",
+        lastEvent: "stop_fallback",
+      });
+    } catch (error: unknown) {
+      return this.registry.update(run.id, {
+        status: "stopping",
+        statusDetail: `Stop failed: ${error instanceof Error ? error.message : String(error)}`,
+        lastEvent: "stop_fallback_failed",
+      });
+    }
   }
 
   private send(socketPath: string, command: AgentRunCommand): Promise<WorkerResponse> {

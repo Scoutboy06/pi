@@ -16,10 +16,8 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Container, Markdown, Spacer, Text, type MarkdownTheme } from "@earendil-works/pi-tui";
 import { discoverAgentsScoped, type AgentConfig, type AgentScope } from "./agent-loader.js";
 import type { AgentRunManager } from "./agent-run-manager.js";
+import type { AgentRunRecord } from "./agent-run-registry.js";
 import {
-  runSubagent,
-  runChain,
-  runParallel,
   formatUsageStats,
   formatToolCall,
   getDisplayItems,
@@ -28,7 +26,6 @@ import {
   isFailedResult,
   withModelOverride,
   type DisplayItem,
-  type OnUpdateCallback,
   type SingleResult,
   type SubagentDetails,
 } from "./agent-runner.js";
@@ -37,6 +34,47 @@ import {
 
 const COLLAPSED_ITEM_COUNT = 10;
 const PER_TASK_OUTPUT_CAP = 50 * 1024; // 50 KB
+
+function runRecordToResult(
+  run: AgentRunRecord,
+  agent: AgentConfig,
+  task: string,
+  step?: number,
+): SingleResult {
+  const failed =
+    run.status === "failed" || run.status === "stopped" || run.initialTurnOutcome !== undefined;
+  const messages =
+    run.messages ??
+    (run.lastAssistantText
+      ? [{ role: "assistant", content: [{ type: "text", text: run.lastAssistantText }] }]
+      : []);
+  return {
+    runId: run.id,
+    agent: agent.name,
+    agentSource: agent.source,
+    task,
+    exitCode: failed ? 1 : 0,
+    messages,
+    stderr: run.error ?? "",
+    usage: run.usage ?? {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: 0,
+      contextTokens: 0,
+      turns: messages.filter((message) => message.role === "assistant").length,
+    },
+    ...(run.model ? { model: run.model } : agent.model ? { model: agent.model } : {}),
+    ...(run.stopReason ? { stopReason: run.stopReason } : {}),
+    ...(run.errorMessage ? { errorMessage: run.errorMessage } : {}),
+    ...(failed && !run.stopReason
+      ? { stopReason: run.initialTurnOutcome === "aborted" ? "aborted" : "error" }
+      : {}),
+    ...(failed && !run.errorMessage ? { errorMessage: run.error ?? "Agent run failed" } : {}),
+    ...(step === undefined ? {} : { step }),
+  };
+}
 
 // ── Tool parameter schemas ─────────────────────────────────────
 
@@ -171,6 +209,7 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
           agentScope,
           projectAgentsDir: discovery.projectAgentsDir,
           results,
+          runIds: results.flatMap((result) => (result.runId ? [result.runId] : [])),
         });
 
       // ── Validation ──────────────────────────────────────────
@@ -232,19 +271,98 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
       // ── Chain mode ──────────────────────────────────────────
 
       if (params.chain && params.chain.length > 0) {
-        const { results, finalOutput, isError } = await runChain(
-          params.chain,
-          ctx.cwd,
-          agentScope,
-          signal,
-          onUpdate as OnUpdateCallback | undefined,
-          discovery.projectAgentsDir,
-        );
-
+        const results: SingleResult[] = [];
+        let previousOutput = "";
+        let chainError = false;
+        for (let i = 0; i < params.chain.length; i++) {
+          const step = params.chain[i];
+          if (!step) continue;
+          const agent = agents.find((candidate) => candidate.name === step.agent);
+          const task = step.task.replace(/\{previous\}/g, previousOutput);
+          if (signal?.aborted) {
+            results.push({
+              agent: step.agent,
+              agentSource: agent?.source ?? "unknown",
+              task,
+              exitCode: 1,
+              messages: [],
+              stderr: "",
+              usage: {
+                input: 0,
+                output: 0,
+                cacheRead: 0,
+                cacheWrite: 0,
+                cost: 0,
+                contextTokens: 0,
+                turns: 0,
+              },
+              stopReason: "aborted",
+              errorMessage: "Chain step was aborted before it started",
+              step: i + 1,
+            });
+            chainError = true;
+            break;
+          }
+          if (!agent) {
+            const errorResult: SingleResult = {
+              agent: step.agent,
+              agentSource: "unknown",
+              task,
+              exitCode: 1,
+              messages: [],
+              stderr: `Unknown agent: "${step.agent}"`,
+              usage: {
+                input: 0,
+                output: 0,
+                cacheRead: 0,
+                cacheWrite: 0,
+                cost: 0,
+                contextTokens: 0,
+                turns: 0,
+              },
+              stopReason: "error",
+              errorMessage: `Unknown agent: "${step.agent}"`,
+              step: i + 1,
+            };
+            results.push(errorResult);
+            chainError = true;
+            break;
+          }
+          const run = await runManager.start(
+            withModelOverride(agent, step.model),
+            task,
+            step.cwd ?? ctx.cwd,
+            params.tags ?? [],
+            {
+              waitForInitialTurn: true,
+              signal,
+              onUpdate: (updated) => {
+                const current = runRecordToResult(updated, agent, task, i + 1);
+                onUpdate?.({
+                  content: [{ type: "text", text: updated.lastAssistantText ?? "(running...)" }],
+                  details: makeDetails("chain")([...results, current]),
+                });
+              },
+            },
+          );
+          const result = runRecordToResult(run, agent, task, i + 1);
+          results.push(result);
+          if (isFailedResult(result)) {
+            chainError = true;
+            break;
+          }
+          previousOutput = getFinalOutput(result.messages);
+        }
+        const finalOutput = chainError
+          ? `Chain stopped at step ${results.length}: ${getResultOutput(results[results.length - 1]!)}`
+          : getFinalOutput(results[results.length - 1]?.messages ?? []) || "(no output)";
+        const finalRunId = results[results.length - 1]?.runId;
         return {
-          content: [{ type: "text", text: finalOutput }],
+          content: [
+            { type: "text", text: `${finalRunId ? `Run ${finalRunId}:\n` : ""}${finalOutput}` },
+          ],
           details: makeDetails("chain")(results),
-          isError,
+          isError: chainError,
         };
       }
 
@@ -263,14 +381,125 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
           };
         }
 
-        const { results, isError } = await runParallel(
-          params.tasks,
-          ctx.cwd,
-          agentScope,
-          signal,
-          onUpdate as OnUpdateCallback | undefined,
-          discovery.projectAgentsDir,
-        );
+        const parallelTasks = params.tasks;
+        const allResults: SingleResult[] = parallelTasks.map((task) => ({
+          agent: task.agent,
+          agentSource: "unknown",
+          task: task.task,
+          exitCode: -1,
+          messages: [],
+          stderr: "",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            cost: 0,
+            contextTokens: 0,
+            turns: 0,
+          },
+        }));
+        let nextTask = 0;
+        const abortedResult = (task: (typeof parallelTasks)[number]): SingleResult => ({
+          agent: task.agent,
+          agentSource: "unknown",
+          task: task.task,
+          exitCode: 1,
+          messages: [],
+          stderr: "",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            cost: 0,
+            contextTokens: 0,
+            turns: 0,
+          },
+          stopReason: "aborted",
+          errorMessage: "Task was aborted before it started",
+        });
+        const workers = Array.from({ length: Math.min(4, parallelTasks.length) }, async () => {
+          while (nextTask < parallelTasks.length) {
+            const index = nextTask++;
+            const task = parallelTasks[index];
+            if (!task) continue;
+            if (signal?.aborted) {
+              allResults[index] = abortedResult(task);
+              onUpdate?.({
+                content: [{ type: "text", text: "Parallel tasks canceled" }],
+                details: makeDetails("parallel")([...allResults]),
+              });
+              continue;
+            }
+            const agent = agents.find((candidate) => candidate.name === task.agent);
+            if (!agent) {
+              allResults[index] = {
+                agent: task.agent,
+                agentSource: "unknown",
+                task: task.task,
+                exitCode: 1,
+                messages: [],
+                stderr: `Unknown agent: "${task.agent}"`,
+                usage: {
+                  input: 0,
+                  output: 0,
+                  cacheRead: 0,
+                  cacheWrite: 0,
+                  cost: 0,
+                  contextTokens: 0,
+                  turns: 0,
+                },
+                stopReason: "error",
+                errorMessage: `Unknown agent: "${task.agent}"`,
+              };
+              continue;
+            }
+            const run = await runManager.start(
+              withModelOverride(agent, task.model),
+              task.task,
+              task.cwd ?? ctx.cwd,
+              params.tags ?? [],
+              {
+                waitForInitialTurn: true,
+                signal,
+                onUpdate: (updated) => {
+                  allResults[index] = runRecordToResult(updated, agent, task.task);
+                  onUpdate?.({
+                    content: [
+                      {
+                        type: "text",
+                        text: `Parallel: ${allResults.filter((result) => result.exitCode !== -1).length}/${allResults.length} done`,
+                      },
+                    ],
+                    details: makeDetails("parallel")([...allResults]),
+                  });
+                },
+              },
+            );
+            allResults[index] = runRecordToResult(run, agent, task.task);
+            onUpdate?.({
+              content: [
+                {
+                  type: "text",
+                  text: `Parallel: ${allResults.filter((result) => result.exitCode !== -1).length}/${allResults.length} done`,
+                },
+              ],
+              details: makeDetails("parallel")([...allResults]),
+            });
+          }
+        });
+        await Promise.all(workers);
+        // A cancellation can happen while workers are finishing. Do not leave
+        // queued placeholders looking successful or perpetually running.
+        if (signal?.aborted) {
+          for (let i = 0; i < allResults.length; i++) {
+            const task = parallelTasks[i];
+            if (task && allResults[i]?.exitCode === -1) allResults[i] = abortedResult(task);
+          }
+        }
+        const results = allResults;
+        const isError = results.some((result) => isFailedResult(result));
 
         const successCount = results.filter((r) => !isFailedResult(r)).length;
         const summaries = results.map((r) => {
@@ -284,7 +513,7 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
               ? output.slice(0, PER_TASK_OUTPUT_CAP) +
                 `\n\n[Output truncated: ${output.length - PER_TASK_OUTPUT_CAP} bytes omitted. Full output preserved in tool details.]`
               : output;
-          return `### [${r.agent}] ${status}\n\n${truncated}`;
+          return `### [${r.agent}] ${status} (${r.runId ?? "no run id"})\n\n${truncated}`;
         });
 
         return {
@@ -342,14 +571,24 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
           };
         }
 
-        const result = await runSubagent(
+        const run = await runManager.start(
           invokedAgent,
           params.task,
           params.cwd ?? ctx.cwd,
-          signal,
-          onUpdate as OnUpdateCallback | undefined,
-          makeDetails("single"),
+          params.tags ?? [],
+          {
+            waitForInitialTurn: true,
+            signal,
+            onUpdate: (updated) => {
+              const current = runRecordToResult(updated, invokedAgent, params.task!);
+              onUpdate?.({
+                content: [{ type: "text", text: updated.lastAssistantText ?? "(running...)" }],
+                details: makeDetails("single")([current]),
+              });
+            },
+          },
         );
+        const result = runRecordToResult(run, invokedAgent, params.task);
 
         const isError = isFailedResult(result);
         if (isError) {
@@ -358,7 +597,7 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
             content: [
               {
                 type: "text",
-                text: `Agent ${result.stopReason || "failed"}: ${errorMsg}`,
+                text: `Run ${result.runId}: Agent ${result.stopReason || "failed"}: ${errorMsg}`,
               },
             ],
             details: makeDetails("single")([result]),
@@ -367,7 +606,12 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
         }
 
         return {
-          content: [{ type: "text", text: getFinalOutput(result.messages) || "(no output)" }],
+          content: [
+            {
+              type: "text",
+              text: `Run ${result.runId}:\n${getFinalOutput(result.messages) || "(no output)"}`,
+            },
+          ],
           details: makeDetails("single")([result]),
         };
       }
