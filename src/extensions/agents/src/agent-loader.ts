@@ -6,13 +6,13 @@
  *   2. .agents/agents/*.md     (cwd + ancestors)
  *   3. .claude/agents/*.md     (cwd + ancestors, compatibility)
  *   4. src/agents/*.md         (bundled with this config package)
- *   5. ~/.pi/agent/agents/*.md (global) — lowest priority
+ *   5. ~/.pi/agents/*.md       (global) — lowest priority
  *
  * Project agents override global agents with the same name.
  * Within the same scope, first discovered wins.
  *
  * Scope control via AgentScope:
- *   - "user":    only global (~/.pi/agent/agents/) and bundled (src/agents/) agents
+ *   - "user":    only global (~/.pi/agents/) and bundled (src/agents/) agents
  *   - "project": only project-local (.pi/agents/, .agents/agents/, .claude/agents/)
  *   - "both":    all locations, project overrides user (default for session persona)
  */
@@ -172,6 +172,11 @@ function findNearestProjectAgentsDir(cwd: string): string | null {
   return findUp(cwd, `${CONFIG_DIR_NAME}/agents`);
 }
 
+/** Resolve the user-level agents directory beside Pi's runtime agent directory. */
+export function getGlobalAgentsDir(agentDir = getAgentDir()): string {
+  return path.join(path.dirname(agentDir), "agents");
+}
+
 /** Resolve agent definitions bundled with this config package. */
 function getBundledAgentsDir(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../agents");
@@ -186,7 +191,7 @@ function getBundledAgentsDir(): string {
  * to always include all locations. The tool uses scope control for security.
  */
 export function discoverAgentsScoped(cwd: string, scope: AgentScope): AgentDiscoveryResult {
-  const globalDir = path.join(getAgentDir(), "agents");
+  const globalDir = getGlobalAgentsDir();
   const projectAgentsDir = findNearestProjectAgentsDir(cwd);
   const dotAgentsDir = findUp(cwd, ".agents/agents");
   const claudeAgentsDir = findUp(cwd, ".claude/agents");
@@ -196,7 +201,7 @@ export function discoverAgentsScoped(cwd: string, scope: AgentScope): AgentDisco
 
   // User-scoped sources (global + config repo)
   if (scope === "user" || scope === "both") {
-    // Global: ~/.pi/agent/agents/
+    // Global: ~/.pi/agents/
     for (const agent of loadAgentsFromDir(globalDir, "global")) {
       agentMap.set(agent.name, agent);
     }

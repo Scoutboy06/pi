@@ -12,7 +12,7 @@
  *   2. .agents/agents/*.md     (cwd + ancestors)
  *   3. .claude/agents/*.md     (cwd + ancestors, compatibility)
  *   4. src/agents/*.md         (bundled with this config package)
- *   5. ~/.pi/agent/agents/*.md (global)
+ *   5. ~/.pi/agents/*.md       (global)
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";

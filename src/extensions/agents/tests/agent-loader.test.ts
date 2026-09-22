@@ -2,7 +2,12 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { discoverAgents, discoverAgentsScoped, formatAgentList } from "../src/agent-loader.js";
+import {
+  discoverAgents,
+  discoverAgentsScoped,
+  formatAgentList,
+  getGlobalAgentsDir,
+} from "../src/agent-loader.js";
 
 // ── Test helpers ───────────────────────────────────────────────
 
@@ -35,6 +40,12 @@ function createAgentFile(
 }
 
 // ── Tests ──────────────────────────────────────────────────────
+
+describe("getGlobalAgentsDir", () => {
+  it("resolves ~/.pi/agents beside the runtime agent directory", () => {
+    expect(getGlobalAgentsDir("/home/test/.pi/agent")).toBe("/home/test/.pi/agents");
+  });
+});
 
 describe("discoverAgents", () => {
   it("returns empty array when no agent dirs exist", () => {

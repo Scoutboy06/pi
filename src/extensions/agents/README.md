@@ -43,7 +43,7 @@ The model can call the `agent` tool to delegate focused tasks to specialized per
 
 **Scope control:**
 
-- `agentScope: "user"` — bundled agents (`src/agents/`) and global agents (`~/.pi/agent/agents/`)
+- `agentScope: "user"` — bundled agents (`src/agents/`) and global agents (`~/.pi/agents/`)
 - `agentScope: "project"` — only project-local agents (`.pi/agents/`, `.agents/agents/`, `.claude/agents/`)
 - `agentScope: "both"` — all locations, project overrides user (default for session persona, not for tool)
 - Default tool scope is `"user"` for safety
@@ -116,6 +116,6 @@ Agents are discovered from five locations (in priority order — higher override
 | 2           | `.agents/agents/*.md` (cwd + ancestors) | Project |
 | 3           | `.claude/agents/*.md` (cwd + ancestors) | Project |
 | 4           | bundled `src/agents/*.md`               | Config  |
-| 5 (lowest)  | `~/.pi/agent/agents/*.md`               | Global  |
+| 5 (lowest)  | `~/.pi/agents/*.md`                     | Global  |
 
 Bundled definitions are resolved relative to the installed extension package, so they are available in every working directory as user-scoped agents. For trusted projects, `.claude/skills/` is also contributed to Pi through `resources_discover`. Native Pi agent definitions override Claude-compatible definitions with the same name.

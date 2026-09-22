@@ -142,7 +142,7 @@ export function registerAgentTool(pi: ExtensionAPI, runManager: AgentRunManager)
       "Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder). " +
       "Single mode can run as a durable background RPC session. " +
       'Default scope is "user" (bundled and global agents). Use agentScope: "both" to include project agents. ' +
-      "Agents are defined in bundled src/agents/, .pi/agents/, .agents/agents/, .claude/agents/, or ~/.pi/agent/agents/.",
+      "Agents are defined in bundled src/agents/, .pi/agents/, .agents/agents/, .claude/agents/, or ~/.pi/agents/.",
     promptSnippet: "Delegate a task to a specialized agent persona (single, parallel, or chain)",
     promptGuidelines: [
       "Use the agent tool to delegate focused tasks to specialized personas. " +
